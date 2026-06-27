@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createMiddlewareClient } from '@/lib/supabase/middleware'
 
-const PUBLIC_ROUTES = ['/', '/login', '/register', '/auth/callback']
+const PUBLIC_ROUTES = ['/', '/login', '/register', '/auth/callback', '/preview']
 const AUTH_ROUTES = ['/login', '/register']
 
 export async function middleware(request: NextRequest) {
@@ -14,7 +14,7 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   const isPublicRoute = PUBLIC_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith('/auth/')
+    (route) => pathname === route || pathname.startsWith('/auth/') || pathname.startsWith('/preview')
   )
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route)
 
