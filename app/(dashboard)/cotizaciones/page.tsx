@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
-import { Plus, Search, X, FileText, Package, Send, Download, ShoppingCart, CheckCheck, Printer } from 'lucide-react'
+import { Plus, Search, X, FileText, Package, Send, Download, ShoppingCart, CheckCheck, Printer, MessageCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -50,7 +50,7 @@ export default function CotizacionesPage() {
     setLoading(true)
     const today = new Date().toISOString().split('T')[0]
     const [{ data: qData }, { data: cData }, { data: pData }] = await Promise.all([
-      supabase.from('quotes').select('*, customer:customers(name)').order('created_at', { ascending: false }).limit(50),
+      supabase.from('quotes').select('*, customer:customers(name, phone)').order('created_at', { ascending: false }).limit(50),
       supabase.from('customers').select('*').eq('is_active', true).order('name'),
       supabase.from('products').select('*').eq('is_active', true).order('name'),
     ])
@@ -286,6 +286,23 @@ export default function CotizacionesPage() {
                       >
                         <Printer className="w-3.5 h-3.5" />
                       </a>
+                      {(() => {
+                        const customer = q.customer as unknown as { name: string; phone?: string }
+                        const phone = customer?.phone?.replace(/\D/g, '')
+                        if (!phone) return null
+                        const msg = encodeURIComponent(`Hola ${customer.name}, te comparto la cotización *${q.folio}* por *${formatCurrency(q.total)}* (válida hasta ${formatDate(q.valid_until)}). Para más detalles, comunícate con nosotros.`)
+                        return (
+                          <a
+                            href={`https://wa.me/${phone.startsWith('52') ? phone : `52${phone}`}?text=${msg}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-ghost btn btn-sm p-1.5 text-text-tertiary hover:text-emerald-400"
+                            title="Enviar por WhatsApp"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </a>
+                        )
+                      })()}
                     </div>
                   </td>
                 </tr>
