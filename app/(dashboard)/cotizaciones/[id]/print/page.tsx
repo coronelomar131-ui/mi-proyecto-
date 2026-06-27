@@ -8,6 +8,22 @@ import type { Quote, QuoteItem, Product } from '@/types'
 
 type QuoteItemWithProduct = QuoteItem & { product: Product }
 
+const STATUS_LABEL: Record<string, string> = {
+  borrador: 'BORRADOR',
+  enviada: 'ENVIADA',
+  aceptada: 'ACEPTADA',
+  rechazada: 'RECHAZADA',
+  vencida: 'VENCIDA',
+}
+
+const STATUS_COLOR: Record<string, string> = {
+  borrador: 'bg-gray-100 text-gray-600',
+  enviada: 'bg-cyan-100 text-cyan-700',
+  aceptada: 'bg-emerald-100 text-emerald-700',
+  rechazada: 'bg-red-100 text-red-600',
+  vencida: 'bg-amber-100 text-amber-700',
+}
+
 export default function PrintQuotePage({ params }: { params: { id: string } }) {
   const supabase = createClient()
   const [quote, setQuote] = useState<Quote | null>(null)
@@ -79,7 +95,7 @@ export default function PrintQuotePage({ params }: { params: { id: string } }) {
       <div className="print:hidden mb-8 flex items-center justify-between">
         <div className="flex items-center gap-2 text-gray-500 text-sm">
           <TrendingUp className="w-4 h-4 text-cyan-500" />
-          <span>Vista de impresión</span>
+          <span>Vista de impresión — {quote.folio}</span>
         </div>
         <button
           onClick={() => window.print()}
@@ -103,18 +119,35 @@ export default function PrintQuotePage({ params }: { params: { id: string } }) {
           <p className="text-2xl font-bold text-gray-900">{quote.folio}</p>
           <p className="text-sm text-gray-500 mt-1">COTIZACIÓN</p>
           <p className="text-xs text-gray-400 mt-1">Emitida: {formatDate(quote.created_at)}</p>
-          <p className="text-xs text-gray-400">Válida hasta: {formatDate(quote.valid_until)}</p>
+          {quote.valid_until && (
+            <p className="text-xs text-gray-400">Válida hasta: {formatDate(quote.valid_until)}</p>
+          )}
+          <span className={`inline-block mt-1 text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLOR[quote.status] ?? 'bg-gray-100 text-gray-600'}`}>
+            {STATUS_LABEL[quote.status] ?? quote.status.toUpperCase()}
+          </span>
         </div>
       </div>
 
-      {/* Customer */}
-      <div className="border border-gray-100 rounded-xl p-5 mb-8 bg-gray-50">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Cliente</p>
-        <p className="font-semibold text-gray-900 text-base">{customer?.name}</p>
-        {customer?.rfc && <p className="text-sm text-gray-500 mt-0.5">RFC: {customer.rfc}</p>}
-        {customer?.email && <p className="text-sm text-gray-500">{customer.email}</p>}
-        {customer?.phone && <p className="text-sm text-gray-500">{customer.phone}</p>}
-        {customer?.address && <p className="text-sm text-gray-500">{customer.address}{customer.city ? `, ${customer.city}` : ''}</p>}
+      {/* Customer + conditions */}
+      <div className="grid grid-cols-2 gap-4 mb-8">
+        <div className="border border-gray-100 rounded-xl p-5 bg-gray-50">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Cliente</p>
+          <p className="font-semibold text-gray-900 text-base">{customer?.name}</p>
+          {customer?.rfc && <p className="text-sm text-gray-500 mt-0.5">RFC: {customer.rfc}</p>}
+          {customer?.email && <p className="text-sm text-gray-500">{customer.email}</p>}
+          {customer?.phone && <p className="text-sm text-gray-500">{customer.phone}</p>}
+          {customer?.address && (
+            <p className="text-sm text-gray-500">{customer.address}{customer.city ? `, ${customer.city}` : ''}</p>
+          )}
+        </div>
+        <div className="border border-gray-100 rounded-xl p-5 bg-gray-50">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Condiciones</p>
+          <p className="text-sm text-gray-700">Esta cotización es válida hasta</p>
+          <p className="font-semibold text-gray-900 text-base mt-0.5">
+            {quote.valid_until ? formatDate(quote.valid_until) : 'Sin fecha límite'}
+          </p>
+          <p className="text-xs text-gray-400 mt-2">Precios en MXN + IVA (16%)</p>
+        </div>
       </div>
 
       {/* Items table */}
@@ -170,7 +203,7 @@ export default function PrintQuotePage({ params }: { params: { id: string } }) {
 
       {/* Footer */}
       <div className="border-t border-gray-100 pt-6 flex items-center justify-between text-xs text-gray-400">
-        <p>Esta cotización es válida hasta el {formatDate(quote.valid_until)}</p>
+        <p>Cotización generada el {formatDate(quote.created_at)}</p>
         <p>Generada con GestorPro · gestorpro.mx</p>
       </div>
     </div>

@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { EmptyState } from '@/components/ui/empty-state'
 import { TableSkeleton } from '@/components/ui/skeleton'
+import { FinanceMonthlyChart } from '@/components/ui/finance-chart'
 import type { Transaction } from '@/types'
 
 const INCOME_CATEGORIES = ['Ventas', 'Cobro de deuda', 'Devolución de proveedor', 'Otro ingreso']
@@ -128,6 +129,12 @@ export default function FinanzasPage() {
             {formatCurrency(balance)}
           </p>
         </div>
+      </div>
+
+      {/* Monthly chart */}
+      <div className="card p-5 mb-6">
+        <h3 className="text-sm font-semibold text-text-primary mb-4">Ingresos vs Egresos — 6 meses</h3>
+        <FinanceMonthlyChart />
       </div>
 
       {/* Filter */}
