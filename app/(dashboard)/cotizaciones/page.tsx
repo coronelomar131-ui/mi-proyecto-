@@ -42,6 +42,7 @@ export default function CotizacionesPage() {
   const [productSearch, setProductSearch] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [validUntil, setValidUntil] = useState('')
+  const [quoteNotes, setQuoteNotes] = useState('')
 
   const searchParams = useSearchParams()
 
@@ -100,6 +101,7 @@ export default function CotizacionesPage() {
       folio,
       valid_until: validUntil || new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       subtotal, discount: 0, tax, total,
+      notes: quoteNotes.trim() || null,
     }).select().single()
 
     if (error) { toast.error('Error al crear cotización'); setSaving(false); return }
@@ -121,6 +123,7 @@ export default function CotizacionesPage() {
     setShowModal(false)
     setCart([])
     setSelectedCustomer(null)
+    setQuoteNotes('')
     fetchData()
     setSaving(false)
   }
@@ -323,24 +326,47 @@ export default function CotizacionesPage() {
               </div>
               {cart.length > 0 && (
                 <div className="space-y-2">
-                  {cart.map((item) => (
-                    <div key={item.product.id} className="flex items-center gap-3 bg-surface-2 rounded-lg p-3">
-                      <Package className="w-4 h-4 text-text-tertiary shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-text-primary truncate">{item.product.name}</p>
-                        <p className="text-xs text-text-tertiary">{formatCurrency(item.unit_price)} c/u</p>
+                  {cart.map((item) => {
+                    const lineTotal = item.unit_price * item.quantity * (1 - item.discount / 100)
+                    return (
+                      <div key={item.product.id} className="bg-surface-2 rounded-lg p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Package className="w-4 h-4 text-text-tertiary shrink-0" />
+                          <p className="text-sm text-text-primary truncate flex-1">{item.product.name}</p>
+                          <button onClick={() => setCart(prev => prev.filter(c => c.product.id !== item.product.id))} className="text-text-tertiary hover:text-red-400 shrink-0"><X className="w-4 h-4" /></button>
+                        </div>
+                        <div className="flex items-center gap-2 pl-6">
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button onClick={() => setCart(prev => prev.map(c => c.product.id === item.product.id ? { ...c, quantity: Math.max(1, c.quantity - 1) } : c))} className="w-6 h-6 rounded bg-surface-3 text-text-secondary hover:text-text-primary flex items-center justify-center text-sm">−</button>
+                            <span className="text-sm font-medium w-7 text-center">{item.quantity}</span>
+                            <button onClick={() => setCart(prev => prev.map(c => c.product.id === item.product.id ? { ...c, quantity: c.quantity + 1 } : c))} className="w-6 h-6 rounded bg-surface-3 text-text-secondary hover:text-text-primary flex items-center justify-center text-sm">+</button>
+                          </div>
+                          <input
+                            type="number" min="0" step="0.01" value={item.unit_price}
+                            onChange={(e) => setCart(prev => prev.map(c => c.product.id === item.product.id ? { ...c, unit_price: parseFloat(e.target.value) || 0 } : c))}
+                            className="input text-xs py-1 w-24 text-right" title="Precio unitario"
+                          />
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number" min="0" max="100" step="1" value={item.discount}
+                              onChange={(e) => setCart(prev => prev.map(c => c.product.id === item.product.id ? { ...c, discount: Math.min(100, parseFloat(e.target.value) || 0) } : c))}
+                              className="input text-xs py-1 w-14 text-center" title="Descuento %"
+                            />
+                            <span className="text-xs text-text-tertiary shrink-0">%</span>
+                          </div>
+                          <span className="text-sm font-semibold text-text-primary ml-auto shrink-0">{formatCurrency(lineTotal)}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setCart(prev => prev.map(c => c.product.id === item.product.id ? { ...c, quantity: Math.max(1, c.quantity - 1) } : c))} className="w-6 h-6 rounded bg-surface-3 text-text-secondary hover:text-text-primary flex items-center justify-center text-sm">−</button>
-                        <span className="text-sm font-medium w-6 text-center">{item.quantity}</span>
-                        <button onClick={() => setCart(prev => prev.map(c => c.product.id === item.product.id ? { ...c, quantity: c.quantity + 1 } : c))} className="w-6 h-6 rounded bg-surface-3 text-text-secondary hover:text-text-primary flex items-center justify-center text-sm">+</button>
-                      </div>
-                      <span className="text-sm font-semibold text-text-primary w-20 text-right">{formatCurrency(item.unit_price * item.quantity)}</span>
-                      <button onClick={() => setCart(prev => prev.filter(c => c.product.id !== item.product.id))} className="text-text-tertiary hover:text-red-400"><X className="w-4 h-4" /></button>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
+
+              {/* Notas */}
+              <div>
+                <label className="label">Notas internas (opcional)</label>
+                <textarea value={quoteNotes} onChange={(e) => setQuoteNotes(e.target.value)} className="input resize-none" rows={2} placeholder="Condiciones especiales, comentarios..." />
+              </div>
             </div>
             <div className="px-6 py-4 border-t border-border bg-surface-2/50 rounded-b-2xl">
               <div className="flex items-center justify-between mb-4">
