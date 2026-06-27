@@ -2,15 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, ShoppingCart, Package, Truck, MoreHorizontal } from 'lucide-react'
+import { LayoutDashboard, ShoppingCart, Package, Monitor, MoreHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { useState } from 'react'
 
 const PRIMARY_NAV = [
   { label: 'Inicio', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'POS', href: '/dashboard/pos', icon: Monitor },
   { label: 'Ventas', href: '/dashboard/ventas', icon: ShoppingCart },
   { label: 'Inventario', href: '/dashboard/inventario', icon: Package },
-  { label: 'Entregas', href: '/dashboard/entregas', icon: Truck },
 ]
 
 const MORE_NAV = [

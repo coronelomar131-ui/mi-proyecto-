@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Menu,
   X,
+  Monitor,
 } from 'lucide-react'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -28,6 +29,7 @@ import type { Profile } from '@/types'
 
 const navItems = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'vendedor', 'almacen'] },
+  { label: 'Punto de Venta', href: '/dashboard/pos', icon: Monitor, roles: ['admin', 'vendedor'] },
   { label: 'Ventas', href: '/dashboard/ventas', icon: ShoppingCart, roles: ['admin', 'vendedor'] },
   { label: 'Clientes', href: '/dashboard/clientes', icon: Users, roles: ['admin', 'vendedor'] },
   { label: 'Inventario', href: '/dashboard/inventario', icon: Package, roles: ['admin', 'almacen'] },
