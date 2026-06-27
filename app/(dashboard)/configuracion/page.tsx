@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Building2, Bell, Shield, Palette, Save, TrendingUp } from 'lucide-react'
+import { Building2, Bell, Shield, Palette, Save, TrendingUp, Tag, Plus, Trash2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
+import type { Category } from '@/types'
 
 interface OrgData {
   id: string
@@ -21,6 +22,14 @@ export default function ConfiguracionPage() {
   const [form, setForm] = useState({ full_name: '', email: '' })
   const [orgForm, setOrgForm] = useState({ name: '' })
   const [userId, setUserId] = useState('')
+  const [categories, setCategories] = useState<Category[]>([])
+  const [newCatName, setNewCatName] = useState('')
+  const [savingCat, setSavingCat] = useState(false)
+
+  const fetchCategories = async () => {
+    const { data } = await supabase.from('categories').select('*').order('name')
+    setCategories((data as Category[]) ?? [])
+  }
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -38,7 +47,6 @@ export default function ConfiguracionPage() {
         if (o) {
           setOrg(o)
           setOrgForm({ name: o.name })
-          // Fetch stats
           const [{ count: userCount }, { count: productCount }, { data: salesData }] = await Promise.all([
             supabase.from('profiles').select('id', { count: 'exact' }).eq('organization_id', o.id).eq('is_active', true),
             supabase.from('products').select('id', { count: 'exact' }).eq('organization_id', o.id).eq('is_active', true),
@@ -52,7 +60,30 @@ export default function ConfiguracionPage() {
       }
     }
     fetchProfile()
+    fetchCategories()
   }, [])
+
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newCatName.trim()) return
+    setSavingCat(true)
+    const { error } = await supabase.from('categories').insert({ name: newCatName.trim() })
+    if (error) {
+      toast.error(error.message.includes('duplicate') ? 'Esa categoría ya existe' : 'Error al crear categoría')
+    } else {
+      toast.success('Categoría creada')
+      setNewCatName('')
+      fetchCategories()
+    }
+    setSavingCat(false)
+  }
+
+  const handleDeleteCategory = async (id: string) => {
+    const { error } = await supabase.from('categories').delete().eq('id', id)
+    if (error) { toast.error('No se puede eliminar — tiene productos asignados'); return }
+    toast.success('Categoría eliminada')
+    fetchCategories()
+  }
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -202,6 +233,46 @@ export default function ConfiguracionPage() {
                 ))}
               </div>
             </div>
+          </div>
+
+          {/* Categories */}
+          <div className="card p-6">
+            <h3 className="text-sm font-semibold text-text-primary mb-5 pb-3 border-b border-border flex items-center gap-2">
+              <Tag className="w-4 h-4 text-accent" />
+              Categorías de productos
+            </h3>
+            <div className="space-y-2 mb-4">
+              {categories.length === 0 && (
+                <p className="text-sm text-text-tertiary text-center py-4">Sin categorías — agrega la primera</p>
+              )}
+              {categories.map((cat) => (
+                <div key={cat.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-2 group">
+                  <div className="flex items-center gap-2">
+                    <Tag className="w-3.5 h-3.5 text-text-tertiary" />
+                    <span className="text-sm text-text-primary">{cat.name}</span>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteCategory(cat.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded text-text-tertiary hover:text-red-400 transition-all"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <form onSubmit={handleAddCategory} className="flex gap-2">
+              <input
+                type="text"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="Nueva categoría..."
+                className="input flex-1"
+              />
+              <button type="submit" disabled={savingCat || !newCatName.trim()} className="btn-primary btn">
+                <Plus className="w-4 h-4" />
+                {savingCat ? 'Guardando...' : 'Agregar'}
+              </button>
+            </form>
           </div>
 
           {/* Security */}
