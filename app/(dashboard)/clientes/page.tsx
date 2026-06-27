@@ -40,6 +40,8 @@ export default function ClientesPage() {
   const [importPreview, setImportPreview] = useState<{ name: string; email: string; phone: string; city: string; rfc: string }[]>([])
   const [paymentAmount, setPaymentAmount] = useState('')
   const [registeringPayment, setRegisteringPayment] = useState(false)
+  const [tagInput, setTagInput] = useState('')
+  const [savingTags, setSavingTags] = useState(false)
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
@@ -222,6 +224,35 @@ export default function ClientesPage() {
     setRegisteringPayment(false)
   }
 
+  const handleAddTag = async (tag: string) => {
+    if (!viewCustomer || !tag.trim()) return
+    const newTag = tag.trim()
+    if (viewCustomer.tags?.includes(newTag)) return
+    setSavingTags(true)
+    const newTags = Array.from(new Set((viewCustomer.tags ?? []).concat(newTag)))
+    const { error } = await supabase.from('customers').update({ tags: newTags }).eq('id', viewCustomer.id)
+    if (!error) {
+      setViewCustomer(prev => prev ? { ...prev, tags: newTags } : null)
+      setTagInput('')
+      fetchCustomers()
+    }
+    setSavingTags(false)
+  }
+
+  const handleRemoveTag = async (tag: string) => {
+    if (!viewCustomer) return
+    setSavingTags(true)
+    const newTags = (viewCustomer.tags ?? []).filter(t => t !== tag)
+    const { error } = await supabase.from('customers').update({ tags: newTags }).eq('id', viewCustomer.id)
+    if (!error) {
+      setViewCustomer(prev => prev ? { ...prev, tags: newTags } : null)
+      fetchCustomers()
+    }
+    setSavingTags(false)
+  }
+
+  const TAG_SUGGESTIONS = ['VIP', 'Mayoreo', 'Menudeo', 'Gobierno', 'Nuevo', 'Moroso', 'Premium', 'Exportación']
+
   const colors = [
     'bg-accent/20 text-accent border-accent/30',
     'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -348,6 +379,16 @@ export default function ClientesPage() {
                     </div>
                   )}
                 </div>
+
+                {customer.tags && customer.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {customer.tags.map((tag) => (
+                      <span key={tag} className="text-2xs px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20 font-medium">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 <div className="divider" />
 
@@ -612,6 +653,53 @@ export default function ClientesPage() {
                       <span className="font-mono">{viewCustomer.rfc}</span>
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div>
+                <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-3">Etiquetas</p>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {(viewCustomer.tags ?? []).map((tag) => (
+                    <span key={tag} className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-accent/10 text-accent border border-accent/20 font-medium">
+                      {tag}
+                      <button
+                        onClick={() => handleRemoveTag(tag)}
+                        disabled={savingTags}
+                        className="ml-0.5 hover:text-red-400 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(tagInput) } }}
+                    placeholder="Nueva etiqueta..."
+                    className="input h-8 text-xs flex-1"
+                  />
+                  <button
+                    onClick={() => handleAddTag(tagInput)}
+                    disabled={savingTags || !tagInput.trim()}
+                    className="btn-secondary btn btn-sm text-xs px-3"
+                  >
+                    +
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {TAG_SUGGESTIONS.filter(t => !(viewCustomer.tags ?? []).includes(t)).map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => handleAddTag(tag)}
+                      className="text-2xs px-2 py-0.5 rounded-full bg-surface-3 text-text-tertiary hover:bg-accent/10 hover:text-accent border border-border hover:border-accent/30 transition-all"
+                    >
+                      + {tag}
+                    </button>
+                  ))}
                 </div>
               </div>
 

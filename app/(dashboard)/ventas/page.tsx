@@ -329,8 +329,18 @@ export default function VentasPage() {
                     </span>
                   </td>
                   <td>{formatDate(sale.created_at)}</td>
-                  <td>
-                    <Eye className="w-4 h-4 text-text-tertiary group-hover:text-accent" />
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-1">
+                      <Link
+                        href={`/dashboard/ventas/${sale.id}/print`}
+                        target="_blank"
+                        className="p-1.5 rounded-lg hover:bg-surface-3 text-text-tertiary hover:text-accent transition-colors"
+                        title="Imprimir nota de venta"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))

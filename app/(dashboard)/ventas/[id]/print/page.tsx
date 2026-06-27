@@ -142,6 +142,12 @@ export default function PrintSalePage({ params }: { params: { id: string } }) {
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Pago</p>
           <p className="font-semibold text-gray-900 text-base">{PAYMENT_LABEL[sale.payment_method] ?? sale.payment_method}</p>
           <p className="text-sm text-gray-500 mt-1">Estado: {statusLabel}</p>
+          {sale.notes && (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Notas</p>
+              <p className="text-sm text-gray-600">{sale.notes}</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -192,6 +198,22 @@ export default function PrintSalePage({ params }: { params: { id: string } }) {
           <div className="flex justify-between font-bold text-base border-t border-gray-200 pt-2">
             <span className="text-gray-900">Total</span>
             <span className="text-cyan-600">{formatCurrency(sale.total)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Signatures */}
+      <div className="grid grid-cols-2 gap-12 mb-10">
+        <div>
+          <div className="border-t-2 border-gray-300 pt-2 mt-10">
+            <p className="text-xs text-gray-400 font-medium">ENTREGUÉ CONFORME</p>
+            <p className="text-xs text-gray-400 mt-0.5">{org?.name ?? 'GestorPro'}</p>
+          </div>
+        </div>
+        <div>
+          <div className="border-t-2 border-gray-300 pt-2 mt-10">
+            <p className="text-xs text-gray-400 font-medium">RECIBÍ CONFORME</p>
+            <p className="text-xs text-gray-400 mt-0.5">{customer?.name}</p>
           </div>
         </div>
       </div>
