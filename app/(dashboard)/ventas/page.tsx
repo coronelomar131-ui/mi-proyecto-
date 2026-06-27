@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { useDebounce } from '@/lib/hooks/use-debounce'
+import { usePagination } from '@/lib/hooks/usePagination'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
-import { Plus, Search, X, ShoppingCart, Package, ArrowUpDown, ArrowUp, ArrowDown, Download, Eye, ChevronRight, Printer, Truck } from 'lucide-react'
+import { Plus, Search, X, ShoppingCart, Package, ArrowUpDown, ArrowUp, ArrowDown, Download, Eye, ChevronRight, ChevronLeft, Printer, Truck } from 'lucide-react'
 import Link from 'next/link'
 import { EmptyState } from '@/components/ui/empty-state'
 import { TableSkeleton } from '@/components/ui/skeleton'
@@ -36,6 +38,7 @@ interface CartItem {
 export default function VentasPage() {
   const supabase = createClient()
   const searchParams = useSearchParams()
+  const { page, total, setTotal, totalPages, goNext, goPrev, reset, getRange } = usePagination(25)
   const [sales, setSales] = useState<Sale[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -55,19 +58,38 @@ export default function VentasPage() {
   const [saleItems, setSaleItems] = useState<(SaleItem & { product: { name: string; sku: string } })[]>([])
   const [loadingItems, setLoadingItems] = useState(false)
 
+  const debouncedSearch = useDebounce(search)
+
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const [{ data: salesData }, { data: customersData }, { data: productsData }] = await Promise.all([
-      supabase.from('sales').select('*, customer:customers(name)').order('created_at', { ascending: false }).limit(50),
+    const { from, to } = getRange()
+
+    let salesQuery = supabase
+      .from('sales')
+      .select('*, customer:customers(name)', { count: 'exact' })
+      .order(sortField, { ascending: sortDir === 'asc' })
+      .range(from, to)
+
+    if (debouncedSearch) {
+      salesQuery = salesQuery.or(`folio.ilike.%${debouncedSearch}%`)
+    }
+    if (filterStatus !== 'all') {
+      salesQuery = salesQuery.eq('status', filterStatus)
+    }
+
+    const [{ data: salesData, count }, { data: customersData }, { data: productsData }] = await Promise.all([
+      salesQuery,
       supabase.from('customers').select('*').eq('is_active', true).order('name'),
       supabase.from('products').select('*').eq('is_active', true).order('name'),
     ])
     setSales((salesData as Sale[]) ?? [])
+    setTotal(count ?? 0)
     setCustomers((customersData as Customer[]) ?? [])
     setProducts((productsData as Product[]) ?? [])
     setLoading(false)
-  }, [])
+  }, [page, debouncedSearch, filterStatus, sortField, sortDir])
 
+  useEffect(() => { reset() }, [debouncedSearch, filterStatus])
   useEffect(() => { fetchData() }, [fetchData])
   useEffect(() => { if (searchParams.get('new') === '1') setShowModal(true) }, [searchParams])
 
@@ -81,19 +103,7 @@ export default function VentasPage() {
     return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-accent" /> : <ArrowDown className="w-3 h-3 text-accent" />
   }
 
-  const filteredSales = sales
-    .filter(
-      (s) =>
-        (filterStatus === 'all' || s.status === filterStatus) &&
-        (s.folio?.toLowerCase().includes(search.toLowerCase()) ||
-        (s.customer as unknown as { name: string })?.name?.toLowerCase().includes(search.toLowerCase()))
-    )
-    .sort((a, b) => {
-      const dir = sortDir === 'asc' ? 1 : -1
-      if (sortField === 'total') return (a.total - b.total) * dir
-      if (sortField === 'status') return a.status.localeCompare(b.status) * dir
-      return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * dir
-    })
+  const filteredSales = sales  // server-side filtered and sorted
 
   const filteredProducts = products.filter(
     (p) =>
@@ -348,6 +358,25 @@ export default function VentasPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+          <p className="text-xs text-text-tertiary">
+            Página <span className="font-semibold text-text-primary">{page}</span> de{' '}
+            <span className="font-semibold text-text-primary">{totalPages}</span>
+            {total > 0 && <span className="ml-1">({total} ventas)</span>}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={goPrev} disabled={page === 1} className="btn-secondary btn btn-sm gap-1">
+              <ChevronLeft className="w-3.5 h-3.5" /> Anterior
+            </button>
+            <button onClick={goNext} disabled={page === totalPages} className="btn-secondary btn btn-sm gap-1">
+              Siguiente <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal nueva venta */}
       {showModal && (

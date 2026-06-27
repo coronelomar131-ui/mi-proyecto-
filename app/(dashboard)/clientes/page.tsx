@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useDebounce } from '@/lib/hooks/use-debounce'
+import { usePagination } from '@/lib/hooks/usePagination'
+import { customerSchema, getFieldErrors } from '@/lib/validations/schemas'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate, initials } from '@/lib/utils/format'
-import { Plus, Search, X, Phone, Mail, MapPin, CreditCard, Users, TrendingUp, AlertCircle, Eye, ShoppingCart, Building2, Download, Upload, FileSpreadsheet, Edit2, MessageCircle, Wallet, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Search, X, Phone, Mail, MapPin, CreditCard, Users, TrendingUp, AlertCircle, Eye, ShoppingCart, Building2, Download, Upload, FileSpreadsheet, Edit2, MessageCircle, Wallet, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { EmptyState } from '@/components/ui/empty-state'
 import { cn } from '@/lib/utils/cn'
@@ -20,9 +22,11 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
 export default function ClientesPage() {
   const supabase = createClient()
   const searchParams = useSearchParams()
+  const { page, total, setTotal, totalPages, goNext, goPrev, reset, getRange } = usePagination(30)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [viewCustomer, setViewCustomer] = useState<Customer | null>(null)
@@ -44,37 +48,55 @@ export default function ClientesPage() {
   const [savingTags, setSavingTags] = useState(false)
   const [showCartera, setShowCartera] = useState(false)
 
+  const debouncedSearch = useDebounce(search)
+
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('customers').select('*').order('name')
-    setCustomers((data as Customer[]) ?? [])
-    setLoading(false)
-  }, [])
+    const { from, to } = getRange()
+    let query = supabase
+      .from('customers')
+      .select('*', { count: 'exact' })
+      .order('name')
+      .range(from, to)
 
+    if (debouncedSearch) {
+      query = query.or(
+        `name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%,city.ilike.%${debouncedSearch}%`
+      )
+    }
+
+    const { data, count } = await query
+    setCustomers((data as Customer[]) ?? [])
+    setTotal(count ?? 0)
+    setLoading(false)
+  }, [page, debouncedSearch])
+
+  useEffect(() => { reset() }, [debouncedSearch])
   useEffect(() => { fetchCustomers() }, [fetchCustomers])
   useEffect(() => { if (searchParams.get('new') === '1') setShowModal(true) }, [searchParams])
 
-  const debouncedSearch = useDebounce(search)
-  const filtered = useMemo(() => customers.filter(
-    (c) =>
-      c.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-      c.email?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-      c.city?.toLowerCase().includes(debouncedSearch.toLowerCase())
-  ), [customers, debouncedSearch])
+  const filtered = customers  // server-side filtered and paginated
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.name.trim()) { toast.error('El nombre es requerido'); return }
+    const result = customerSchema.safeParse({ ...form, credit_limit: parseFloat(form.credit_limit) || 0 })
+    if (!result.success) {
+      const errs = getFieldErrors(result)
+      setFormErrors(errs as Record<string, string>)
+      toast.error(Object.values(errs)[0] ?? 'Datos inválidos')
+      return
+    }
+    setFormErrors({})
     setSaving(true)
 
     const { error } = await supabase.from('customers').insert({
-      name: form.name,
-      email: form.email || null,
-      phone: form.phone || null,
-      address: form.address || null,
-      city: form.city || null,
-      rfc: form.rfc || null,
-      credit_limit: parseFloat(form.credit_limit) || 0,
+      name: result.data.name,
+      email: result.data.email || null,
+      phone: result.data.phone || null,
+      address: result.data.address || null,
+      city: result.data.city || null,
+      rfc: result.data.rfc || null,
+      credit_limit: result.data.credit_limit,
       balance: 0,
       tags: [],
       is_active: true,
@@ -506,6 +528,25 @@ export default function ClientesPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
+          <p className="text-xs text-text-tertiary">
+            Página <span className="font-semibold text-text-primary">{page}</span> de{' '}
+            <span className="font-semibold text-text-primary">{totalPages}</span>
+            {total > 0 && <span className="ml-1">({total} clientes)</span>}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={goPrev} disabled={page === 1} className="btn-secondary btn btn-sm gap-1">
+              <ChevronLeft className="w-3.5 h-3.5" /> Anterior
+            </button>
+            <button onClick={goNext} disabled={page === totalPages} className="btn-secondary btn btn-sm gap-1">
+              Siguiente <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       )}
 

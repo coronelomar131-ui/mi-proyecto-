@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useDebounce } from '@/lib/hooks/use-debounce'
+import { usePagination } from '@/lib/hooks/usePagination'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatNumber } from '@/lib/utils/format'
-import { Plus, Search, X, AlertTriangle, Package, Download, Edit2, TrendingUp, TrendingDown, Upload, FileSpreadsheet, Percent, ShoppingBag } from 'lucide-react'
+import { Plus, Search, X, AlertTriangle, Package, Download, Edit2, TrendingUp, TrendingDown, Upload, FileSpreadsheet, Percent, ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
@@ -15,6 +16,7 @@ import type { Product, Category } from '@/types'
 
 export default function InventarioPage() {
   const supabase = createClient()
+  const { page, total, setTotal, totalPages, goNext, goPrev, reset, getRange } = usePagination(30)
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -47,29 +49,43 @@ export default function InventarioPage() {
 
   const searchParams = useSearchParams()
 
+  const debouncedSearch = useDebounce(search)
+
   const fetchProducts = useCallback(async () => {
     setLoading(true)
-    const [{ data: prods }, { data: cats }] = await Promise.all([
-      supabase.from('products').select('*, category:categories(id, name)').order('name'),
+    const { from, to } = getRange()
+
+    let prodsQuery = supabase
+      .from('products')
+      .select('*, category:categories(id, name)', { count: 'exact' })
+      .order('name')
+      .range(from, to)
+
+    if (debouncedSearch) {
+      prodsQuery = prodsQuery.or(`name.ilike.%${debouncedSearch}%,sku.ilike.%${debouncedSearch}%`)
+    }
+    if (filterCategory) {
+      prodsQuery = prodsQuery.eq('category_id', filterCategory)
+    }
+
+    const [{ data: prods, count }, { data: cats }] = await Promise.all([
+      prodsQuery,
       supabase.from('categories').select('*').order('name'),
     ])
-    setProducts((prods as Product[]) ?? [])
+
+    const allProds = (prods as Product[]) ?? []
+    // filterLow: PostgREST can't compare two columns — filter client-side on current page
+    setProducts(filterLow ? allProds.filter((p) => p.stock <= p.min_stock) : allProds)
+    setTotal(count ?? 0)
     setCategories((cats as Category[]) ?? [])
     setLoading(false)
-  }, [])
+  }, [page, debouncedSearch, filterLow, filterCategory])
 
+  useEffect(() => { reset() }, [debouncedSearch, filterLow, filterCategory])
   useEffect(() => { fetchProducts() }, [fetchProducts])
   useEffect(() => { if (searchParams.get('new') === '1') setShowModal(true) }, [searchParams])
 
-  const debouncedSearch = useDebounce(search)
-  const filtered = useMemo(() => products.filter((p) => {
-    const matchSearch =
-      p.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-      p.sku.toLowerCase().includes(debouncedSearch.toLowerCase())
-    const matchLow = !filterLow || p.stock <= p.min_stock
-    const matchCat = !filterCategory || p.category_id === filterCategory
-    return matchSearch && matchLow && matchCat
-  }), [products, debouncedSearch, filterLow, filterCategory])
+  const filtered = products  // server-side filtered and paginated
 
   const lowStockCount = products.filter((p) => p.stock <= p.min_stock).length
 
@@ -211,11 +227,14 @@ export default function InventarioPage() {
     const pct = parseFloat(bulkPct)
     if (isNaN(pct) || pct === 0) { toast.error('Ingresa un porcentaje válido'); return }
     setSavingBulk(true)
-    const targets = bulkCategory
-      ? products.filter((p) => p.category_id === bulkCategory)
-      : products
+
+    // Fetch ALL matching products from DB (not just current page)
+    let query = supabase.from('products').select('id, sale_price, cost_price').eq('is_active', true)
+    if (bulkCategory) query = query.eq('category_id', bulkCategory)
+    const { data: targets } = await query
+
     let updated = 0
-    for (const p of targets) {
+    for (const p of targets ?? []) {
       const currentVal = bulkField === 'sale_price' ? p.sale_price : p.cost_price
       const newVal = Math.round(currentVal * (1 + pct / 100) * 100) / 100
       const { error } = await supabase.from('products').update({ [bulkField]: newVal }).eq('id', p.id)
@@ -429,6 +448,25 @@ export default function InventarioPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+          <p className="text-xs text-text-tertiary">
+            Página <span className="font-semibold text-text-primary">{page}</span> de{' '}
+            <span className="font-semibold text-text-primary">{totalPages}</span>
+            {total > 0 && <span className="ml-1">({total} productos)</span>}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={goPrev} disabled={page === 1} className="btn-secondary btn btn-sm gap-1">
+              <ChevronLeft className="w-3.5 h-3.5" /> Anterior
+            </button>
+            <button onClick={goNext} disabled={page === totalPages} className="btn-secondary btn btn-sm gap-1">
+              Siguiente <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Edit modal */}
       {editProduct && (
