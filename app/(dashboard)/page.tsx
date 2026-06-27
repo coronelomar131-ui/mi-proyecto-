@@ -58,13 +58,35 @@ async function getKPIs(orgId: string) {
 
 async function getRecentActivity(orgId: string) {
   const supabase = createClient()
-  const { data } = await supabase
-    .from('sales')
-    .select('id, folio, total, status, created_at, customer:customers(name)')
-    .eq('organization_id', orgId)
-    .order('created_at', { ascending: false })
-    .limit(6)
-  return data ?? []
+  const today = new Date().toISOString().split('T')[0]
+  const in3Days = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+  const [{ data: salesData }, { data: expiringQuotes }, { data: todayDeliveries }] = await Promise.all([
+    supabase
+      .from('sales')
+      .select('id, folio, total, status, created_at, customer:customers(name)')
+      .eq('organization_id', orgId)
+      .order('created_at', { ascending: false })
+      .limit(6),
+    supabase
+      .from('quotes')
+      .select('id, folio, total, valid_until, customer:customers(name)')
+      .eq('organization_id', orgId)
+      .in('status', ['borrador', 'enviada'])
+      .lte('valid_until', in3Days)
+      .gte('valid_until', today)
+      .order('valid_until', { ascending: true })
+      .limit(5),
+    supabase
+      .from('deliveries')
+      .select('id, address, status, sale:sales(folio, customer:customers(name))')
+      .eq('organization_id', orgId)
+      .eq('scheduled_date', today)
+      .in('status', ['pendiente', 'en_ruta'])
+      .order('created_at', { ascending: true })
+      .limit(5),
+  ])
+  return { sales: salesData ?? [], expiringQuotes: expiringQuotes ?? [], todayDeliveries: todayDeliveries ?? [] }
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -87,9 +109,12 @@ export default async function DashboardPage() {
     .single()
 
   const orgId = profile?.organization_id ?? ''
-  const [kpis, recentSales] = orgId
+  const [kpis, activity] = orgId
     ? await Promise.all([getKPIs(orgId), getRecentActivity(orgId)])
-    : [null, []]
+    : [null, { sales: [], expiringQuotes: [], todayDeliveries: [] }]
+  const recentSales = activity.sales
+  const expiringQuotes = activity.expiringQuotes
+  const todayDeliveries = activity.todayDeliveries
 
   const greeting = (() => {
     const h = new Date().getHours()
@@ -221,6 +246,75 @@ export default async function DashboardPage() {
 
       {/* Bottom section */}
       <div className="grid lg:grid-cols-2 gap-6">
+        {/* Expiring quotes alert */}
+        {expiringQuotes.length > 0 && (
+          <div className="lg:col-span-2 card p-5 border-amber-500/20">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+                <FileText className="w-4 h-4 text-amber-400" />
+                Cotizaciones por vencer
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-2xs font-bold">{expiringQuotes.length}</span>
+              </h3>
+              <Link href="/dashboard/cotizaciones" className="text-xs text-accent hover:text-accent-400 flex items-center gap-1">
+                Ver todas <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {expiringQuotes.map((q) => {
+                const customerName = (q.customer as unknown as { name: string })?.name ?? '—'
+                const daysLeft = Math.ceil((new Date(q.valid_until).getTime() - Date.now()) / 86400000)
+                return (
+                  <Link key={q.id} href="/dashboard/cotizaciones" className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-amber-500/5 border border-amber-500/15 hover:border-amber-500/30 transition-colors">
+                    <div className="min-w-0">
+                      <p className="text-sm font-mono text-text-primary truncate">{q.folio}</p>
+                      <p className="text-xs text-text-tertiary truncate">{customerName}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold text-text-primary">{formatCurrency(q.total)}</p>
+                      <p className={cn('text-2xs', daysLeft === 0 ? 'text-red-400 font-semibold' : 'text-amber-400')}>
+                        {daysLeft === 0 ? 'Vence hoy' : `${daysLeft}d restante${daysLeft !== 1 ? 's' : ''}`}
+                      </p>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Today's deliveries */}
+        {todayDeliveries.length > 0 && (
+          <div className="lg:col-span-2 card p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+                <Truck className="w-4 h-4 text-purple-400" />
+                Entregas de hoy
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 text-2xs font-bold">{todayDeliveries.length}</span>
+              </h3>
+              <Link href="/dashboard/entregas" className="text-xs text-accent hover:text-accent-400 flex items-center gap-1">
+                Ver todas <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {todayDeliveries.map((d) => {
+                const sale = d.sale as unknown as { folio: string; customer: { name: string } }
+                return (
+                  <Link key={d.id} href="/dashboard/entregas" className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-purple-500/5 border border-purple-500/15 hover:border-purple-500/30 transition-colors">
+                    <div className={cn('w-2 h-2 rounded-full shrink-0', d.status === 'en_ruta' ? 'bg-accent animate-pulse' : 'bg-purple-400')} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-text-primary font-medium truncate">{sale?.customer?.name ?? '—'}</p>
+                      <p className="text-xs text-text-tertiary truncate">{d.address}</p>
+                    </div>
+                    <span className={cn('text-2xs font-medium shrink-0', d.status === 'en_ruta' ? 'text-accent' : 'text-purple-400')}>
+                      {d.status === 'en_ruta' ? 'En ruta' : 'Pendiente'}
+                    </span>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Recent sales + sparkline */}
         <div className="card p-5 space-y-5">
           <div className="flex items-center justify-between">
