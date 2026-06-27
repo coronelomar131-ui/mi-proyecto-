@@ -39,6 +39,7 @@ export default function ReportesPage() {
   const [rangeDays, setRangeDays] = useState(30)
   const [salesData, setSalesData] = useState<{ name: string; ventas: number; pedidos: number }[]>([])
   const [topProducts, setTopProducts] = useState<{ name: string; value: number }[]>([])
+  const [topCustomers, setTopCustomers] = useState<{ name: string; value: number; orders: number }[]>([])
   const [customerSegments, setCustomerSegments] = useState<{ name: string; value: number }[]>([])
   const [summary, setSummary] = useState({ totalRevenue: 0, totalOrders: 0, avgOrder: 0, uniqueCustomers: 0 })
   const [loading, setLoading] = useState(true)
@@ -47,10 +48,11 @@ export default function ReportesPage() {
     setLoading(true)
     const since = subDays(new Date(), days).toISOString()
 
-    const [{ data: salesRaw }, { data: itemsRaw }, { data: customersRaw }] = await Promise.all([
+    const [{ data: salesRaw }, { data: itemsRaw }, { data: customersRaw }, { data: salesWithCustomer }] = await Promise.all([
       supabase.from('sales').select('id, total, created_at, status, customer_id').gte('created_at', since).neq('status', 'cancelada'),
       supabase.from('sale_items').select('quantity, subtotal, product:products(name)').limit(1000),
       supabase.from('customers').select('city, is_active').eq('is_active', true),
+      supabase.from('sales').select('total, customer_id, customer:customers(name)').gte('created_at', since).neq('status', 'cancelada').limit(500),
     ])
 
     // Summary KPIs
@@ -85,6 +87,17 @@ export default function ReportesPage() {
     })
     const sorted = Object.entries(productMap).sort((a, b) => b[1] - a[1]).slice(0, 5)
     setTopProducts(sorted.map(([name, value]) => ({ name: name.slice(0, 20), value })))
+
+    // Top customers by revenue
+    const customerMap: Record<string, { value: number; orders: number }> = {}
+    salesWithCustomer?.forEach((s) => {
+      const name = (s.customer as unknown as { name: string })?.name ?? 'Desconocido'
+      if (!customerMap[name]) customerMap[name] = { value: 0, orders: 0 }
+      customerMap[name].value += s.total ?? 0
+      customerMap[name].orders += 1
+    })
+    const topCust = Object.entries(customerMap).sort((a, b) => b[1].value - a[1].value).slice(0, 5)
+    setTopCustomers(topCust.map(([name, d]) => ({ name: name.slice(0, 22), value: d.value, orders: d.orders })))
 
     // Customer by city
     const cityMap: Record<string, number> = {}
@@ -189,30 +202,37 @@ export default function ReportesPage() {
             )}
           </div>
 
-          {/* Customer distribution */}
+          {/* Top customers */}
           <div className="card p-5">
             <div className="flex items-center gap-2 mb-5">
               <Users className="w-4 h-4 text-accent" />
-              <h3 className="text-sm font-semibold text-text-primary">Clientes por ciudad</h3>
+              <h3 className="text-sm font-semibold text-text-primary">Top clientes por ingresos</h3>
             </div>
-            {customerSegments.length === 0 ? (
-              <div className="flex items-center justify-center py-12 text-text-tertiary text-sm">Sin datos</div>
+            {topCustomers.length === 0 ? (
+              <div className="flex items-center justify-center py-12 text-text-tertiary text-sm">Sin datos suficientes</div>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={customerSegments} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value">
-                    {customerSegments.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend
-                    iconType="circle"
-                    iconSize={8}
-                    formatter={(value) => <span style={{ color: '#9898A8', fontSize: 11 }}>{value}</span>}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="space-y-3">
+                {topCustomers.map((c, i) => {
+                  const pct = topCustomers[0].value > 0 ? (c.value / topCustomers[0].value) * 100 : 0
+                  return (
+                    <div key={c.name} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-surface-3 flex items-center justify-center text-2xs font-bold text-text-tertiary">{i + 1}</span>
+                          <span className="text-text-primary font-medium truncate max-w-[130px]">{c.name}</span>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-text-primary font-semibold">{formatCurrency(c.value)}</span>
+                          <span className="text-text-tertiary ml-2">{c.orders} ped.</span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 bg-surface-3 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full bg-accent" style={{ width: `${pct.toFixed(0)}%` }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </div>
         </div>

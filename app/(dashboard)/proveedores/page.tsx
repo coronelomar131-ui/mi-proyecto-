@@ -2,13 +2,15 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Search, X, Phone, Mail, Building2, Factory, ShoppingBag, Trash2, Download } from 'lucide-react'
+import { Plus, Search, X, Phone, Mail, Building2, Factory, ShoppingBag, Trash2, Download, PackageCheck, Clock, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { EmptyState } from '@/components/ui/empty-state'
 import { CardSkeleton } from '@/components/ui/skeleton'
-import { formatCurrency } from '@/lib/utils/format'
-import type { Supplier, Product } from '@/types'
+import { formatCurrency, formatDate } from '@/lib/utils/format'
+import type { Supplier, Product, Purchase, PurchaseItem } from '@/types'
+
+type PurchaseWithItems = Purchase & { items: (PurchaseItem & { product: { name: string; sku: string } })[] }
 
 interface OrderItem {
   product: Product
@@ -34,6 +36,10 @@ export default function ProveedoresPage() {
   const [expectedDate, setExpectedDate] = useState(
     new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   )
+  const [ordersSupplier, setOrdersSupplier] = useState<Supplier | null>(null)
+  const [pendingOrders, setPendingOrders] = useState<PurchaseWithItems[]>([])
+  const [loadingOrders, setLoadingOrders] = useState(false)
+  const [receivingId, setReceivingId] = useState<string | null>(null)
 
   const fetchSuppliers = useCallback(async () => {
     setLoading(true)
@@ -129,6 +135,34 @@ export default function ProveedoresPage() {
     setPlacingOrder(false)
   }
 
+  const openOrdersView = async (supplier: Supplier) => {
+    setOrdersSupplier(supplier)
+    setLoadingOrders(true)
+    const { data } = await supabase
+      .from('purchases')
+      .select('*, items:purchase_items(*, product:products(name, sku))')
+      .eq('supplier_id', supplier.id)
+      .in('status', ['pendiente', 'parcial'])
+      .order('created_at', { ascending: false })
+      .limit(20)
+    setPendingOrders((data as PurchaseWithItems[]) ?? [])
+    setLoadingOrders(false)
+  }
+
+  const handleReceiveOrder = async (purchase: PurchaseWithItems) => {
+    setReceivingId(purchase.id)
+    for (const item of purchase.items) {
+      const { data: prod } = await supabase.from('products').select('stock').eq('id', item.product_id).single()
+      const newStock = (prod?.stock ?? 0) + item.quantity
+      await supabase.from('products').update({ stock: newStock }).eq('id', item.product_id)
+      await supabase.from('purchase_items').update({ received_qty: item.quantity }).eq('id', item.id)
+    }
+    await supabase.from('purchases').update({ status: 'recibida', received_at: new Date().toISOString() }).eq('id', purchase.id)
+    toast.success(`Orden ${purchase.folio} recibida — stock actualizado`)
+    setReceivingId(null)
+    if (ordersSupplier) openOrdersView(ordersSupplier)
+  }
+
   const exportCSV = () => {
     const csv = ['Nombre,Contacto,Email,Teléfono,RFC,Días de crédito,Estado']
     suppliers.forEach((s) => {
@@ -206,19 +240,99 @@ export default function ProveedoresPage() {
                   </a>
                 )}
               </div>
-              <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between">
+              <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between gap-2">
                 {supplier.payment_terms ? (
-                  <p className="text-xs text-text-tertiary">Crédito: <span className="text-text-primary font-medium">{supplier.payment_terms} días</span></p>
+                  <p className="text-xs text-text-tertiary shrink-0">Crédito: <span className="text-text-primary font-medium">{supplier.payment_terms}d</span></p>
                 ) : <span />}
-                <button
-                  onClick={() => openOrderModal(supplier)}
-                  className="btn btn-sm bg-surface-3 hover:bg-accent/10 text-text-secondary hover:text-accent border border-border hover:border-accent/30 text-xs transition-all"
-                >
-                  <ShoppingBag className="w-3 h-3" /> Orden de compra
-                </button>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => openOrdersView(supplier)}
+                    className="btn btn-sm bg-surface-3 hover:bg-purple-500/10 text-text-secondary hover:text-purple-400 border border-border hover:border-purple-500/30 text-xs transition-all"
+                  >
+                    <PackageCheck className="w-3 h-3" /> Pedidos
+                  </button>
+                  <button
+                    onClick={() => openOrderModal(supplier)}
+                    className="btn btn-sm bg-surface-3 hover:bg-accent/10 text-text-secondary hover:text-accent border border-border hover:border-accent/30 text-xs transition-all"
+                  >
+                    <ShoppingBag className="w-3 h-3" /> Nueva OC
+                  </button>
+                </div>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Pending orders view modal */}
+      {ordersSupplier && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setOrdersSupplier(null)}>
+          <div className="modal w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+              <div>
+                <h2 className="font-semibold text-text-primary">Órdenes de compra</h2>
+                <p className="text-xs text-text-tertiary mt-0.5">{ordersSupplier.name} · pendientes de recepción</p>
+              </div>
+              <button onClick={() => setOrdersSupplier(null)} className="btn-ghost btn p-1.5"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingOrders ? (
+                <div className="flex items-center justify-center py-12">
+                  <span className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin" />
+                </div>
+              ) : pendingOrders.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <PackageCheck className="w-8 h-8 text-emerald-400 mb-2 opacity-60" />
+                  <p className="text-sm text-text-secondary">Sin órdenes pendientes</p>
+                  <p className="text-xs text-text-tertiary mt-1">Todas las órdenes han sido recibidas</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {pendingOrders.map((order) => (
+                    <div key={order.id} className="card p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-mono text-sm font-semibold text-text-primary">{order.folio}</p>
+                          <p className="text-xs text-text-tertiary flex items-center gap-1 mt-0.5">
+                            <Clock className="w-3 h-3" />
+                            {order.expected_date ? `Esperada: ${formatDate(order.expected_date)}` : 'Sin fecha estimada'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-accent">{formatCurrency(order.total)}</p>
+                          {order.expected_date && new Date(order.expected_date) < new Date() && (
+                            <span className="badge badge-red flex items-center gap-0.5 mt-1"><AlertCircle className="w-3 h-3" />Vencida</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        {order.items.map((item) => (
+                          <div key={item.id} className="flex items-center justify-between text-xs bg-surface-2 rounded-lg px-3 py-2">
+                            <div>
+                              <p className="text-text-primary font-medium">{item.product?.name}</p>
+                              <p className="text-text-tertiary font-mono">{item.product?.sku}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-text-primary">{item.quantity} uds</p>
+                              <p className="text-text-tertiary">{formatCurrency(item.unit_cost)} c/u</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => handleReceiveOrder(order)}
+                        disabled={receivingId === order.id}
+                        className="btn-primary btn btn-sm w-full"
+                      >
+                        <PackageCheck className="w-3.5 h-3.5" />
+                        {receivingId === order.id ? 'Procesando...' : 'Recibir orden completa (+stock)'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
