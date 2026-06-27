@@ -14,9 +14,19 @@ import type { Transaction } from '@/types'
 const INCOME_CATEGORIES = ['Ventas', 'Cobro de deuda', 'Devolución de proveedor', 'Otro ingreso']
 const EXPENSE_CATEGORIES = ['Proveedores', 'Nómina', 'Renta', 'Servicios', 'Logística', 'Otro egreso']
 
+interface DailyBrief {
+  efectivo: number
+  transferencia: number
+  credito: number
+  cheque: number
+  totalSales: number
+  saleCount: number
+}
+
 export default function FinanzasPage() {
   const supabase = createClient()
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [dailyBrief, setDailyBrief] = useState<DailyBrief | null>(null)
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -38,8 +48,22 @@ export default function FinanzasPage() {
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('transactions').select('*').order('date', { ascending: false }).limit(100)
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const [{ data }, { data: todaySales }] = await Promise.all([
+      supabase.from('transactions').select('*').order('date', { ascending: false }).limit(100),
+      supabase.from('sales').select('total, payment_method').gte('created_at', todayStart.toISOString()).neq('status', 'cancelada'),
+    ])
     setTransactions((data as Transaction[]) ?? [])
+
+    const brief: DailyBrief = { efectivo: 0, transferencia: 0, credito: 0, cheque: 0, totalSales: 0, saleCount: 0 }
+    todaySales?.forEach((s) => {
+      const pm = s.payment_method as keyof typeof brief
+      if (pm in brief) (brief[pm] as number) += s.total ?? 0
+      brief.totalSales += s.total ?? 0
+      brief.saleCount += 1
+    })
+    setDailyBrief(brief)
     setLoading(false)
   }, [])
 
@@ -136,6 +160,40 @@ export default function FinanzasPage() {
           </p>
         </div>
       </div>
+
+      {/* Daily brief / Arqueo de caja */}
+      {dailyBrief && dailyBrief.saleCount > 0 && (
+        <div className="card p-5 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-accent" />
+              Resumen de hoy — {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </h3>
+            <div className="text-right">
+              <p className="text-lg font-bold text-accent">{formatCurrency(dailyBrief.totalSales)}</p>
+              <p className="text-xs text-text-tertiary">{dailyBrief.saleCount} venta{dailyBrief.saleCount !== 1 ? 's' : ''}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Efectivo', amount: dailyBrief.efectivo, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+              { label: 'Transferencia', amount: dailyBrief.transferencia, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+              { label: 'Crédito', amount: dailyBrief.credito, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+              { label: 'Cheque', amount: dailyBrief.cheque, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+            ].map((pm) => (
+              <div key={pm.label} className={cn('rounded-xl p-3 text-center', pm.bg, pm.amount === 0 && 'opacity-40')}>
+                <p className={cn('text-lg font-bold', pm.color)}>{formatCurrency(pm.amount)}</p>
+                <p className="text-xs text-text-tertiary mt-0.5">{pm.label}</p>
+              </div>
+            ))}
+          </div>
+          {dailyBrief.efectivo > 0 && (
+            <p className="text-xs text-text-tertiary mt-3 text-center">
+              Efectivo esperado en caja: <strong className="text-emerald-400">{formatCurrency(dailyBrief.efectivo)}</strong>
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Monthly chart */}
       <div className="card p-5 mb-6">
