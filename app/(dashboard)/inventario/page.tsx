@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useDebounce } from '@/lib/hooks/use-debounce'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatNumber } from '@/lib/utils/format'
 import { Plus, Search, X, AlertTriangle, Package, Download } from 'lucide-react'
@@ -32,13 +33,14 @@ export default function InventarioPage() {
 
   useEffect(() => { fetchProducts() }, [fetchProducts])
 
-  const filtered = products.filter((p) => {
+  const debouncedSearch = useDebounce(search)
+  const filtered = useMemo(() => products.filter((p) => {
     const matchSearch =
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.sku.toLowerCase().includes(search.toLowerCase())
+      p.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      p.sku.toLowerCase().includes(debouncedSearch.toLowerCase())
     const matchLow = !filterLow || p.stock <= p.min_stock
     return matchSearch && matchLow
-  })
+  }), [products, debouncedSearch, filterLow])
 
   const lowStockCount = products.filter((p) => p.stock <= p.min_stock).length
 
@@ -163,9 +165,9 @@ export default function InventarioPage() {
               <tr><td colSpan={8}>
                 <EmptyState
                   icon={<Package className="w-6 h-6" />}
-                  title={search || filterLow ? 'Sin resultados' : 'Sin productos aún'}
-                  description={search ? `No hay productos con "${search}"` : filterLow ? 'No hay productos con stock bajo. ¡Bien surtido!' : 'Agrega tu primer producto al catálogo para empezar a vender.'}
-                  action={!search && !filterLow ? { label: 'Agregar producto', onClick: () => setShowModal(true) } : undefined}
+                  title={debouncedSearch || filterLow ? 'Sin resultados' : 'Sin productos aún'}
+                  description={debouncedSearch ? `No hay productos con "${debouncedSearch}"` : filterLow ? 'No hay productos con stock bajo. ¡Bien surtido!' : 'Agrega tu primer producto al catálogo para empezar a vender.'}
+                  action={!debouncedSearch && !filterLow ? { label: 'Agregar producto', onClick: () => setShowModal(true) } : undefined}
                 />
               </td></tr>
             ) : (

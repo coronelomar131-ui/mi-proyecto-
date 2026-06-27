@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useDebounce } from '@/lib/hooks/use-debounce'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, initials } from '@/lib/utils/format'
 import { Plus, Search, X, Phone, Mail, MapPin, CreditCard, Users, TrendingUp, AlertCircle } from 'lucide-react'
@@ -28,12 +29,13 @@ export default function ClientesPage() {
 
   useEffect(() => { fetchCustomers() }, [fetchCustomers])
 
-  const filtered = customers.filter(
+  const debouncedSearch = useDebounce(search)
+  const filtered = useMemo(() => customers.filter(
     (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.email?.toLowerCase().includes(search.toLowerCase()) ||
-      c.city?.toLowerCase().includes(search.toLowerCase())
-  )
+      c.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      c.email?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      c.city?.toLowerCase().includes(debouncedSearch.toLowerCase())
+  ), [customers, debouncedSearch])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -124,10 +126,10 @@ export default function ClientesPage() {
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState
-          icon={search ? <Search className="w-6 h-6" /> : <Users className="w-6 h-6" />}
-          title={search ? 'Sin resultados' : 'Aún no hay clientes'}
-          description={search ? `No encontramos clientes con "${search}"` : 'Agrega tu primer cliente para empezar a gestionar tus ventas y créditos.'}
-          action={!search ? { label: 'Agregar cliente', onClick: () => setShowModal(true) } : undefined}
+          icon={debouncedSearch ? <Search className="w-6 h-6" /> : <Users className="w-6 h-6" />}
+          title={debouncedSearch ? 'Sin resultados' : 'Aún no hay clientes'}
+          description={debouncedSearch ? `No encontramos clientes con "${debouncedSearch}"` : 'Agrega tu primer cliente para empezar a gestionar tus ventas y créditos.'}
+          action={!debouncedSearch ? { label: 'Agregar cliente', onClick: () => setShowModal(true) } : undefined}
         />
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
-import { Plus, Search, X, FileText, Package, Send, Download, ShoppingCart, CheckCheck } from 'lucide-react'
+import { Plus, Search, X, FileText, Package, Send, Download, ShoppingCart, CheckCheck, Printer } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -256,6 +256,15 @@ export default function CotizacionesPage() {
                           Convertir a venta
                         </button>
                       )}
+                      <a
+                        href={`/dashboard/cotizaciones/${q.id}/print`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-ghost btn btn-sm p-1.5 text-text-tertiary hover:text-accent"
+                        title="Imprimir / PDF"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                      </a>
                     </div>
                   </td>
                 </tr>
