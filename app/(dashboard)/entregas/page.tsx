@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils/format'
-import { Truck, MapPin, Clock, CheckCircle, XCircle, Navigation } from 'lucide-react'
+import { Truck, MapPin, Clock, CheckCircle, XCircle, Navigation, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -29,6 +29,9 @@ export default function EntregasPage() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState<DeliveryStatus | 'all'>('all')
+  const [failingDelivery, setFailingDelivery] = useState<Delivery | null>(null)
+  const [failureReason, setFailureReason] = useState('')
+  const [savingFail, setSavingFail] = useState(false)
 
   const fetchDeliveries = useCallback(async () => {
     setLoading(true)
@@ -66,10 +69,18 @@ export default function EntregasPage() {
     fetchDeliveries()
   }
 
-  const handleMarkFailed = async (id: string) => {
-    const { error } = await supabase.from('deliveries').update({ status: 'fallido' }).eq('id', id)
-    if (error) { toast.error('Error'); return }
+  const handleMarkFailed = async () => {
+    if (!failingDelivery) return
+    setSavingFail(true)
+    const { error } = await supabase.from('deliveries').update({
+      status: 'fallido',
+      notes: failureReason.trim() || null,
+    }).eq('id', failingDelivery.id)
+    if (error) { toast.error('Error al marcar entrega'); setSavingFail(false); return }
     toast.error('Entrega marcada como fallida')
+    setFailingDelivery(null)
+    setFailureReason('')
+    setSavingFail(false)
     fetchDeliveries()
   }
 
@@ -194,7 +205,7 @@ export default function EntregasPage() {
                       </button>
                     )}
                     {delivery.status === 'en_ruta' && (
-                      <button onClick={() => handleMarkFailed(delivery.id)} className="btn-danger btn btn-sm px-3">
+                      <button onClick={() => { setFailingDelivery(delivery); setFailureReason('') }} className="btn-danger btn btn-sm px-3" title="Marcar como fallida">
                         <XCircle className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -203,6 +214,48 @@ export default function EntregasPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Failure reason modal */}
+      {failingDelivery && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setFailingDelivery(null)}>
+          <div className="modal max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <XCircle className="w-4 h-4 text-red-400" />
+                <h2 className="font-semibold text-text-primary">Marcar entrega fallida</h2>
+              </div>
+              <button onClick={() => setFailingDelivery(null)} className="btn-ghost btn p-1.5">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-text-secondary">
+                ¿Por qué falló la entrega? (opcional)
+              </p>
+              <textarea
+                value={failureReason}
+                onChange={(e) => setFailureReason(e.target.value)}
+                placeholder="Ej: Cliente ausente, dirección incorrecta, acceso restringido..."
+                className="input resize-none text-sm"
+                rows={3}
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <button onClick={() => setFailingDelivery(null)} className="btn-secondary btn flex-1">
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleMarkFailed}
+                  disabled={savingFail}
+                  className="btn-danger btn flex-1"
+                >
+                  {savingFail ? 'Guardando...' : 'Confirmar falla'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

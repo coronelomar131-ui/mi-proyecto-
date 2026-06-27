@@ -10,16 +10,18 @@ import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { EmptyState } from '@/components/ui/empty-state'
 import { TableSkeleton } from '@/components/ui/skeleton'
-import type { Product } from '@/types'
+import type { Product, Category } from '@/types'
 
 export default function InventarioPage() {
   const supabase = createClient()
   const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [filterLow, setFilterLow] = useState(false)
+  const [filterCategory, setFilterCategory] = useState<string>('')
   const [editProduct, setEditProduct] = useState<Product | null>(null)
   const [showStockModal, setShowStockModal] = useState(false)
   const [stockTarget, setStockTarget] = useState<Product | null>(null)
@@ -27,11 +29,11 @@ export default function InventarioPage() {
   const [stockType, setStockType] = useState<'add' | 'subtract' | 'set'>('add')
   const [form, setForm] = useState({
     sku: '', name: '', description: '', unit: 'pieza',
-    cost_price: '', sale_price: '', stock: '0', min_stock: '5',
+    cost_price: '', sale_price: '', stock: '0', min_stock: '5', category_id: '',
   })
   const [editForm, setEditForm] = useState({
     name: '', description: '', unit: 'pieza',
-    cost_price: '', sale_price: '', min_stock: '',
+    cost_price: '', sale_price: '', min_stock: '', category_id: '',
   })
   const [showImport, setShowImport] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -41,8 +43,12 @@ export default function InventarioPage() {
 
   const fetchProducts = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('products').select('*').order('name')
-    setProducts((data as Product[]) ?? [])
+    const [{ data: prods }, { data: cats }] = await Promise.all([
+      supabase.from('products').select('*, category:categories(id, name)').order('name'),
+      supabase.from('categories').select('*').order('name'),
+    ])
+    setProducts((prods as Product[]) ?? [])
+    setCategories((cats as Category[]) ?? [])
     setLoading(false)
   }, [])
 
@@ -55,8 +61,9 @@ export default function InventarioPage() {
       p.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
       p.sku.toLowerCase().includes(debouncedSearch.toLowerCase())
     const matchLow = !filterLow || p.stock <= p.min_stock
-    return matchSearch && matchLow
-  }), [products, debouncedSearch, filterLow])
+    const matchCat = !filterCategory || p.category_id === filterCategory
+    return matchSearch && matchLow && matchCat
+  }), [products, debouncedSearch, filterLow, filterCategory])
 
   const lowStockCount = products.filter((p) => p.stock <= p.min_stock).length
 
@@ -74,6 +81,7 @@ export default function InventarioPage() {
       sale_price: parseFloat(form.sale_price) || 0,
       stock: parseInt(form.stock) || 0,
       min_stock: parseInt(form.min_stock) || 5,
+      category_id: form.category_id || null,
       is_active: true,
     })
 
@@ -82,7 +90,7 @@ export default function InventarioPage() {
     } else {
       toast.success('Producto creado')
       setShowModal(false)
-      setForm({ sku: '', name: '', description: '', unit: 'pieza', cost_price: '', sale_price: '', stock: '0', min_stock: '5' })
+      setForm({ sku: '', name: '', description: '', unit: 'pieza', cost_price: '', sale_price: '', stock: '0', min_stock: '5', category_id: '' })
       fetchProducts()
     }
     setSaving(false)
@@ -97,6 +105,7 @@ export default function InventarioPage() {
       cost_price: String(p.cost_price),
       sale_price: String(p.sale_price),
       min_stock: String(p.min_stock),
+      category_id: p.category_id ?? '',
     })
   }
 
@@ -111,6 +120,7 @@ export default function InventarioPage() {
       cost_price: parseFloat(editForm.cost_price) || 0,
       sale_price: parseFloat(editForm.sale_price) || 0,
       min_stock: parseInt(editForm.min_stock) || 5,
+      category_id: editForm.category_id || null,
     }).eq('id', editProduct.id)
     if (error) toast.error('Error al actualizar producto')
     else { toast.success('Producto actualizado'); setEditProduct(null); fetchProducts() }
@@ -244,7 +254,7 @@ export default function InventarioPage() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row gap-3 mb-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
           <input
@@ -264,6 +274,27 @@ export default function InventarioPage() {
         </button>
       </div>
 
+      {/* Category filter chips */}
+      {categories.length > 0 && (
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <button
+            onClick={() => setFilterCategory('')}
+            className={cn('px-3 py-1 rounded-full text-xs font-medium border transition-all', !filterCategory ? 'bg-accent text-surface-0 border-accent' : 'bg-surface-2 text-text-secondary border-border hover:border-accent/50')}
+          >
+            Todas
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setFilterCategory(filterCategory === cat.id ? '' : cat.id)}
+              className={cn('px-3 py-1 rounded-full text-xs font-medium border transition-all', filterCategory === cat.id ? 'bg-accent text-surface-0 border-accent' : 'bg-surface-2 text-text-secondary border-border hover:border-accent/50')}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Table */}
       <div className="table-container">
         <table className="table">
@@ -271,7 +302,7 @@ export default function InventarioPage() {
             <tr>
               <th>SKU</th>
               <th>Producto</th>
-              <th>Unidad</th>
+              <th>Categoría</th>
               <th>Costo</th>
               <th>Precio venta</th>
               <th>Stock</th>
@@ -302,7 +333,7 @@ export default function InventarioPage() {
                       <p className="font-medium text-text-primary text-sm">{p.name}</p>
                       {p.description && <p className="text-xs text-text-tertiary truncate max-w-[200px]">{p.description}</p>}
                     </td>
-                    <td>{p.unit}</td>
+                    <td className="text-text-tertiary text-xs">{(p.category as unknown as { name: string })?.name ?? '—'}</td>
                     <td>{formatCurrency(p.cost_price)}</td>
                     <td className="font-semibold text-text-primary">{formatCurrency(p.sale_price)}</td>
                     <td>
@@ -381,6 +412,15 @@ export default function InventarioPage() {
                   <label className="label">Precio de venta</label>
                   <input type="number" min="0" step="0.01" value={editForm.sale_price} onChange={(e) => setEditForm(f => ({ ...f, sale_price: e.target.value }))} className="input" />
                 </div>
+                {categories.length > 0 && (
+                  <div className="col-span-2">
+                    <label className="label">Categoría</label>
+                    <select value={editForm.category_id} onChange={(e) => setEditForm(f => ({ ...f, category_id: e.target.value }))} className="input">
+                      <option value="">Sin categoría</option>
+                      {categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                    </select>
+                  </div>
+                )}
               </div>
               {editForm.cost_price && editForm.sale_price && (
                 <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-4 py-2 text-sm">
@@ -572,6 +612,15 @@ export default function InventarioPage() {
                   <label className="label">Stock mínimo</label>
                   <input type="number" min="0" value={form.min_stock} onChange={(e) => setForm(p => ({ ...p, min_stock: e.target.value }))} className="input" />
                 </div>
+                {categories.length > 0 && (
+                  <div className="col-span-2">
+                    <label className="label">Categoría</label>
+                    <select value={form.category_id} onChange={(e) => setForm(p => ({ ...p, category_id: e.target.value }))} className="input">
+                      <option value="">Sin categoría</option>
+                      {categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                    </select>
+                  </div>
+                )}
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)} className="btn-secondary btn flex-1">Cancelar</button>

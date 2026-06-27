@@ -16,6 +16,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils/cn'
 import { OnboardingChecklist } from '@/components/ui/onboarding-checklist'
 import { SalesSparkline } from '@/components/ui/sales-sparkline'
+import { SalesGoalWidget } from '@/components/ui/sales-goal'
 
 async function getKPIs(orgId: string) {
   const supabase = createClient()
@@ -197,6 +198,9 @@ export default async function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* Monthly sales goal */}
+      <SalesGoalWidget />
 
       {/* Quick actions */}
       <div className="mb-8">
