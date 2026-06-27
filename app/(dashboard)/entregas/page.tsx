@@ -153,10 +153,16 @@ export default function EntregasPage() {
                 </div>
 
                 {delivery.address && (
-                  <div className="flex items-start gap-2 text-xs text-text-tertiary mb-3">
-                    <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                    <span className="line-clamp-2">{delivery.address}</span>
-                  </div>
+                  <a
+                    href={`https://maps.google.com/?q=${encodeURIComponent(delivery.address)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-start gap-2 text-xs text-text-tertiary mb-3 hover:text-accent transition-colors group/map"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5 group-hover/map:text-accent" />
+                    <span className="line-clamp-2 group-hover/map:underline">{delivery.address}</span>
+                  </a>
                 )}
 
                 {delivery.scheduled_date && (

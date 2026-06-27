@@ -1,34 +1,68 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { CheckCircle, Circle, ChevronDown, ChevronUp, X, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils/cn'
+import { createClient } from '@/lib/supabase/client'
 
-const STEPS = [
-  { id: 'profile', label: 'Completa tu perfil', href: '/dashboard/configuracion', done: false },
-  { id: 'product', label: 'Agrega tu primer producto', href: '/dashboard/inventario', done: false },
-  { id: 'customer', label: 'Registra tu primer cliente', href: '/dashboard/clientes', done: false },
-  { id: 'sale', label: 'Crea tu primera venta', href: '/dashboard/ventas', done: false },
-  { id: 'invite', label: 'Invita a un compañero', href: '/dashboard/usuarios', done: false },
+interface Step {
+  id: string
+  label: string
+  href: string
+  done: boolean
+}
+
+const BASE_STEPS: Omit<Step, 'done'>[] = [
+  { id: 'product', label: 'Agrega tu primer producto', href: '/dashboard/inventario' },
+  { id: 'customer', label: 'Registra tu primer cliente', href: '/dashboard/clientes' },
+  { id: 'sale', label: 'Crea tu primera venta', href: '/dashboard/ventas' },
+  { id: 'quote', label: 'Envía una cotización', href: '/dashboard/cotizaciones' },
+  { id: 'invite', label: 'Invita a un compañero de equipo', href: '/dashboard/usuarios' },
 ]
 
 export function OnboardingChecklist() {
+  const supabase = createClient()
   const [expanded, setExpanded] = useState(true)
   const [dismissed, setDismissed] = useState(false)
-  const [steps, setSteps] = useState(STEPS)
+  const [steps, setSteps] = useState<Step[]>(BASE_STEPS.map((s) => ({ ...s, done: false })))
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    const check = async () => {
+      const [
+        { count: products },
+        { count: customers },
+        { count: sales },
+        { count: quotes },
+        { count: users },
+      ] = await Promise.all([
+        supabase.from('products').select('id', { count: 'exact' }).limit(1),
+        supabase.from('customers').select('id', { count: 'exact' }).limit(1),
+        supabase.from('sales').select('id', { count: 'exact' }).limit(1),
+        supabase.from('quotes').select('id', { count: 'exact' }).in('status', ['enviada', 'aceptada']).limit(1),
+        supabase.from('profiles').select('id', { count: 'exact' }),
+      ])
+      setSteps([
+        { id: 'product', label: 'Agrega tu primer producto', href: '/dashboard/inventario', done: (products ?? 0) > 0 },
+        { id: 'customer', label: 'Registra tu primer cliente', href: '/dashboard/clientes', done: (customers ?? 0) > 0 },
+        { id: 'sale', label: 'Crea tu primera venta', href: '/dashboard/ventas', done: (sales ?? 0) > 0 },
+        { id: 'quote', label: 'Envía una cotización', href: '/dashboard/cotizaciones', done: (quotes ?? 0) > 0 },
+        { id: 'invite', label: 'Invita a un compañero de equipo', href: '/dashboard/usuarios', done: (users ?? 0) > 1 },
+      ])
+      setLoaded(true)
+    }
+    check()
+  }, [])
 
   if (dismissed) return null
+  if (!loaded) return null
 
   const completed = steps.filter((s) => s.done).length
   const total = steps.length
   const progress = Math.round((completed / total) * 100)
 
   if (completed === total) return null
-
-  const toggleStep = (id: string) => {
-    setSteps((prev) => prev.map((s) => s.id === id ? { ...s, done: !s.done } : s))
-  }
 
   return (
     <div className="card border-accent/20 mb-6 overflow-hidden">
@@ -71,18 +105,9 @@ export function OnboardingChecklist() {
         <div className="border-t border-border/50 divide-y divide-border/50">
           {steps.map((step, i) => (
             <div key={step.id} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2/20 transition-colors group">
-              <button
-                onClick={() => toggleStep(step.id)}
-                className={cn(
-                  'shrink-0 transition-colors',
-                  step.done ? 'text-accent' : 'text-text-tertiary hover:text-text-secondary'
-                )}
-              >
-                {step.done
-                  ? <CheckCircle className="w-5 h-5" />
-                  : <Circle className="w-5 h-5" />
-                }
-              </button>
+              <div className={cn('shrink-0', step.done ? 'text-accent' : 'text-text-tertiary')}>
+                {step.done ? <CheckCircle className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
+              </div>
               <span className={cn(
                 'flex-1 text-sm transition-colors',
                 step.done ? 'text-text-tertiary line-through' : 'text-text-secondary'
