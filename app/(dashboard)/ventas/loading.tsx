@@ -10,8 +10,8 @@ export default function VentasLoading() {
       <Skeleton className="h-10 w-full rounded-lg mb-4" />
       <div className="table-container">
         <table className="table">
-          <thead><tr>{['Folio','Cliente','Total','Pago','Estado','Fecha'].map(h => <th key={h}>{h}</th>)}</tr></thead>
-          <tbody><TableSkeleton rows={8} cols={6} /></tbody>
+          <thead><tr>{['Folio','Cliente','Total','Pago','Estado','Fecha',''].map(h => <th key={h}>{h}</th>)}</tr></thead>
+          <tbody><TableSkeleton rows={8} cols={7} /></tbody>
         </table>
       </div>
     </div>

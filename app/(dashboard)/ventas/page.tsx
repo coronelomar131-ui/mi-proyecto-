@@ -3,12 +3,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
-import { Plus, Search, X, ShoppingCart, Package, ArrowUpDown, ArrowUp, ArrowDown, Download } from 'lucide-react'
+import { Plus, Search, X, ShoppingCart, Package, ArrowUpDown, ArrowUp, ArrowDown, Download, Eye, ChevronRight } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
-import type { Sale, Customer, Product, SaleStatus } from '@/types'
+import type { Sale, Customer, Product, SaleItem, SaleStatus } from '@/types'
 
 const STATUS_BADGE: Record<SaleStatus, string> = {
   pendiente: 'badge-yellow',
@@ -46,6 +46,9 @@ export default function VentasPage() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'transferencia' | 'credito'>('efectivo')
   const [saving, setSaving] = useState(false)
+  const [viewSale, setViewSale] = useState<Sale | null>(null)
+  const [saleItems, setSaleItems] = useState<(SaleItem & { product: { name: string; sku: string } })[]>([])
+  const [loadingItems, setLoadingItems] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -160,6 +163,25 @@ export default function VentasPage() {
     setSaving(false)
   }
 
+  const openSaleDetail = async (sale: Sale) => {
+    setViewSale(sale)
+    setLoadingItems(true)
+    const { data } = await supabase
+      .from('sale_items')
+      .select('*, product:products(name, sku)')
+      .eq('sale_id', sale.id)
+    setSaleItems((data as (SaleItem & { product: { name: string; sku: string } })[]) ?? [])
+    setLoadingItems(false)
+  }
+
+  const handleUpdateSaleStatus = async (saleId: string, status: SaleStatus) => {
+    const { error } = await supabase.from('sales').update({ status }).eq('id', saleId)
+    if (error) { toast.error('Error al actualizar'); return }
+    toast.success('Estado actualizado')
+    setViewSale(prev => prev ? { ...prev, status } : null)
+    fetchData()
+  }
+
   return (
     <div className="animate-fade-in">
       <div className="page-header">
@@ -225,14 +247,15 @@ export default function VentasPage() {
                   Fecha <SortIcon field="created_at" />
                 </button>
               </th>
+              <th className="w-8"></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <TableSkeleton rows={6} cols={6} />
+              <TableSkeleton rows={6} cols={7} />
             ) : filteredSales.length === 0 ? (
               <tr>
-                <td colSpan={6}>
+                <td colSpan={7}>
                   <EmptyState
                     icon={<ShoppingCart className="w-6 h-6" />}
                     title={search ? 'Sin resultados' : 'Aún no hay ventas'}
@@ -243,7 +266,7 @@ export default function VentasPage() {
               </tr>
             ) : (
               filteredSales.map((sale) => (
-                <tr key={sale.id}>
+                <tr key={sale.id} className="cursor-pointer hover:bg-surface-2/50" onClick={() => openSaleDetail(sale)}>
                   <td className="font-mono text-xs text-accent">{sale.folio}</td>
                   <td className="font-medium text-text-primary">
                     {(sale.customer as unknown as { name: string })?.name ?? '—'}
@@ -256,6 +279,9 @@ export default function VentasPage() {
                     </span>
                   </td>
                   <td>{formatDate(sale.created_at)}</td>
+                  <td>
+                    <Eye className="w-4 h-4 text-text-tertiary group-hover:text-accent" />
+                  </td>
                 </tr>
               ))
             )}
@@ -383,6 +409,104 @@ export default function VentasPage() {
                   {saving ? 'Guardando...' : 'Crear venta'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sale detail modal */}
+      {viewSale && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setViewSale(null)}>
+          <div className="modal w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div>
+                <h2 className="font-semibold text-text-primary font-mono text-sm">{viewSale.folio}</h2>
+                <p className="text-xs text-text-tertiary">{formatDate(viewSale.created_at)}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={cn('badge', STATUS_BADGE[viewSale.status])}>{STATUS_LABELS[viewSale.status]}</span>
+                <button onClick={() => setViewSale(null)} className="btn-ghost btn p-1.5"><X className="w-4 h-4" /></button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              {/* Customer info */}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-text-tertiary">Cliente</span>
+                <span className="font-medium text-text-primary">
+                  {(viewSale.customer as unknown as { name: string })?.name ?? '—'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-text-tertiary">Método de pago</span>
+                <span className="capitalize text-text-primary">{viewSale.payment_method}</span>
+              </div>
+
+              {/* Items */}
+              <div>
+                <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-3">Productos</p>
+                {loadingItems ? (
+                  <div className="flex items-center justify-center py-8">
+                    <span className="w-5 h-5 border-2 border-border border-t-accent rounded-full animate-spin" />
+                  </div>
+                ) : saleItems.length === 0 ? (
+                  <p className="text-sm text-text-tertiary text-center py-4">Sin productos registrados</p>
+                ) : (
+                  <div className="space-y-2">
+                    {saleItems.map((item) => (
+                      <div key={item.id} className="flex items-center gap-3 bg-surface-2 rounded-lg p-3">
+                        <Package className="w-4 h-4 text-text-tertiary shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-text-primary truncate">{item.product?.name ?? 'Producto'}</p>
+                          <p className="text-xs text-text-tertiary">{item.product?.sku} · {formatCurrency(item.unit_price)} c/u</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-text-primary">{formatCurrency(item.subtotal)}</p>
+                          <p className="text-xs text-text-tertiary">×{item.quantity}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Totals */}
+              <div className="border-t border-border pt-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-tertiary">Subtotal</span>
+                  <span className="text-text-secondary">{formatCurrency(viewSale.subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-tertiary">IVA (16%)</span>
+                  <span className="text-text-secondary">{formatCurrency(viewSale.tax)}</span>
+                </div>
+                <div className="flex justify-between text-base font-bold">
+                  <span className="text-text-primary">Total</span>
+                  <span className="text-accent">{formatCurrency(viewSale.total)}</span>
+                </div>
+              </div>
+
+              {/* Status progression */}
+              {viewSale.status !== 'cancelada' && viewSale.status !== 'entregada' && (
+                <div className="border-t border-border pt-4">
+                  <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-3">Avanzar estado</p>
+                  <div className="flex gap-2">
+                    {viewSale.status === 'pendiente' && (
+                      <button onClick={() => handleUpdateSaleStatus(viewSale.id, 'confirmada')} className="btn-primary btn btn-sm flex-1">
+                        <ChevronRight className="w-3.5 h-3.5" /> Confirmar
+                      </button>
+                    )}
+                    {viewSale.status === 'confirmada' && (
+                      <button onClick={() => handleUpdateSaleStatus(viewSale.id, 'entregada')} className="btn-primary btn btn-sm flex-1">
+                        <ChevronRight className="w-3.5 h-3.5" /> Marcar entregada
+                      </button>
+                    )}
+                    <button onClick={() => handleUpdateSaleStatus(viewSale.id, 'cancelada')} className="btn-danger btn btn-sm">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
