@@ -13,6 +13,13 @@ export const metadata: Metadata = {
   keywords: ['ERP', 'distribuidores', 'inventario', 'ventas', 'CRM', 'SaaS'],
   authors: [{ name: 'GestorPro' }],
   robots: 'index, follow',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'GestorPro',
+  },
+  applicationName: 'GestorPro',
+  formatDetection: { telephone: false },
 }
 
 export const viewport: Viewport = {

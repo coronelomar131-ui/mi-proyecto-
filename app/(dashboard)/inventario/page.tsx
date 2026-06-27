@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatNumber } from '@/lib/utils/format'
@@ -36,6 +37,8 @@ export default function InventarioPage() {
   const [importing, setImporting] = useState(false)
   const [importPreview, setImportPreview] = useState<{ sku: string; name: string; sale_price: number; stock: number }[]>([])
 
+  const searchParams = useSearchParams()
+
   const fetchProducts = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase.from('products').select('*').order('name')
@@ -44,6 +47,7 @@ export default function InventarioPage() {
   }, [])
 
   useEffect(() => { fetchProducts() }, [fetchProducts])
+  useEffect(() => { if (searchParams.get('new') === '1') setShowModal(true) }, [searchParams])
 
   const debouncedSearch = useDebounce(search)
   const filtered = useMemo(() => products.filter((p) => {

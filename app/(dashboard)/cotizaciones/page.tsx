@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
 import { Plus, Search, X, FileText, Package, Send, Download, ShoppingCart, CheckCheck, Printer } from 'lucide-react'
@@ -42,6 +43,8 @@ export default function CotizacionesPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [validUntil, setValidUntil] = useState('')
 
+  const searchParams = useSearchParams()
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     const [{ data: qData }, { data: cData }, { data: pData }] = await Promise.all([
@@ -56,6 +59,7 @@ export default function CotizacionesPage() {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { if (searchParams.get('new') === '1') setShowModal(true) }, [searchParams])
 
   const filtered = quotes.filter(
     (q) =>

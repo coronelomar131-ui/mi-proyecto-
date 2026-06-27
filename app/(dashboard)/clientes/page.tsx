@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate, initials } from '@/lib/utils/format'
@@ -12,6 +13,7 @@ import type { Customer, Sale } from '@/types'
 
 export default function ClientesPage() {
   const supabase = createClient()
+  const searchParams = useSearchParams()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -39,6 +41,7 @@ export default function ClientesPage() {
   }, [])
 
   useEffect(() => { fetchCustomers() }, [fetchCustomers])
+  useEffect(() => { if (searchParams.get('new') === '1') setShowModal(true) }, [searchParams])
 
   const debouncedSearch = useDebounce(search)
   const filtered = useMemo(() => customers.filter(

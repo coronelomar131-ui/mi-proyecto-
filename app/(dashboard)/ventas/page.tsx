@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
 import { Plus, Search, X, ShoppingCart, Package, ArrowUpDown, ArrowUp, ArrowDown, Download, Eye, ChevronRight, Printer, Truck } from 'lucide-react'
@@ -34,6 +35,7 @@ interface CartItem {
 
 export default function VentasPage() {
   const supabase = createClient()
+  const searchParams = useSearchParams()
   const [sales, setSales] = useState<Sale[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -66,6 +68,7 @@ export default function VentasPage() {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { if (searchParams.get('new') === '1') setShowModal(true) }, [searchParams])
 
   const toggleSort = (field: typeof sortField) => {
     if (sortField === field) setSortDir((d) => d === 'asc' ? 'desc' : 'asc')
