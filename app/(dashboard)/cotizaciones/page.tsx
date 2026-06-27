@@ -88,10 +88,12 @@ export default function CotizacionesPage() {
     const tax = subtotal * 0.16
     const total = subtotal + tax
 
+    const { count: quoteCount } = await supabase.from('quotes').select('id', { count: 'exact' })
+    const folio = `COT-${String((quoteCount ?? 0) + 1).padStart(5, '0')}`
     const { data: quoteData, error } = await supabase.from('quotes').insert({
       customer_id: selectedCustomer.id,
       status: 'borrador',
-      folio: `COT-${Date.now()}`,
+      folio,
       valid_until: validUntil || new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       subtotal, discount: 0, tax, total,
     }).select().single()
@@ -135,6 +137,8 @@ export default function CotizacionesPage() {
 
     if (itemsErr || !items) { toast.error('Error al obtener productos'); setSaving(false); return }
 
+    const { count: saleCount } = await supabase.from('sales').select('id', { count: 'exact' })
+    const saleFolio = `VTA-${String((saleCount ?? 0) + 1).padStart(5, '0')}`
     const { data: saleData, error: saleErr } = await supabase.from('sales').insert({
       customer_id: quote.customer_id,
       status: 'pendiente',
@@ -143,7 +147,7 @@ export default function CotizacionesPage() {
       discount: quote.discount,
       tax: quote.tax,
       total: quote.total,
-      folio: `VTA-${Date.now()}`,
+      folio: saleFolio,
     }).select().single()
 
     if (saleErr || !saleData) { toast.error('Error al crear venta'); setSaving(false); return }

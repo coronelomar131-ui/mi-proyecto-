@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate, initials } from '@/lib/utils/format'
-import { Plus, Search, X, Phone, Mail, MapPin, CreditCard, Users, TrendingUp, AlertCircle, Eye, ShoppingCart, Building2 } from 'lucide-react'
+import { Plus, Search, X, Phone, Mail, MapPin, CreditCard, Users, TrendingUp, AlertCircle, Eye, ShoppingCart, Building2, Download, Upload, FileSpreadsheet, Edit2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { EmptyState } from '@/components/ui/empty-state'
 import { cn } from '@/lib/utils/cn'
@@ -23,6 +23,13 @@ export default function ClientesPage() {
   const [form, setForm] = useState({
     name: '', email: '', phone: '', address: '', city: '', rfc: '', credit_limit: '0',
   })
+  const [editCustomer, setEditCustomer] = useState<Customer | null>(null)
+  const [editForm, setEditForm] = useState({
+    name: '', email: '', phone: '', address: '', city: '', rfc: '', credit_limit: '',
+  })
+  const [showImport, setShowImport] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importPreview, setImportPreview] = useState<{ name: string; email: string; phone: string; city: string; rfc: string }[]>([])
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
@@ -70,6 +77,100 @@ export default function ClientesPage() {
     setSaving(false)
   }
 
+  const openEdit = (customer: Customer) => {
+    setEditCustomer(customer)
+    setEditForm({
+      name: customer.name,
+      email: customer.email ?? '',
+      phone: customer.phone ?? '',
+      address: customer.address ?? '',
+      city: customer.city ?? '',
+      rfc: customer.rfc ?? '',
+      credit_limit: String(customer.credit_limit),
+    })
+  }
+
+  const handleUpdateCustomer = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editCustomer) return
+    setSaving(true)
+    const { error } = await supabase.from('customers').update({
+      name: editForm.name,
+      email: editForm.email || null,
+      phone: editForm.phone || null,
+      address: editForm.address || null,
+      city: editForm.city || null,
+      rfc: editForm.rfc || null,
+      credit_limit: parseFloat(editForm.credit_limit) || 0,
+    }).eq('id', editCustomer.id)
+    if (error) toast.error('Error al actualizar cliente')
+    else { toast.success('Cliente actualizado'); setEditCustomer(null); fetchCustomers() }
+    setSaving(false)
+  }
+
+  const handleCSVFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string
+      const lines = text.split('\n').map((l) => l.trim()).filter(Boolean).slice(1)
+      const rows = lines.map((line) => {
+        const cols = line.split(',').map((c) => c.replace(/^"|"$/g, '').trim())
+        return { name: cols[0] ?? '', email: cols[1] ?? '', phone: cols[2] ?? '', city: cols[3] ?? '', rfc: cols[4] ?? '' }
+      }).filter((r) => r.name)
+      setImportPreview(rows)
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
+  const handleImportCustomers = async () => {
+    if (importPreview.length === 0) return
+    setImporting(true)
+    let success = 0
+    for (const row of importPreview) {
+      const { error } = await supabase.from('customers').insert({
+        name: row.name,
+        email: row.email || null,
+        phone: row.phone || null,
+        city: row.city || null,
+        rfc: row.rfc || null,
+        credit_limit: 0,
+        balance: 0,
+        tags: [],
+        is_active: true,
+      })
+      if (!error) success++
+    }
+    toast.success(`${success} clientes importados`)
+    setShowImport(false)
+    setImportPreview([])
+    fetchCustomers()
+    setImporting(false)
+  }
+
+  const exportCSV = () => {
+    const csv = ['Nombre,Email,Teléfono,Ciudad,RFC,Límite de crédito,Saldo,Estado']
+    customers.forEach((c) => {
+      csv.push(`"${c.name}",${c.email ?? ''},${c.phone ?? ''},${c.city ?? ''},${c.rfc ?? ''},${c.credit_limit},${c.balance},${c.is_active ? 'Activo' : 'Inactivo'}`)
+    })
+    const blob = new Blob([csv.join('\n')], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `clientes-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+  }
+
+  const downloadTemplate = () => {
+    const csv = 'Nombre,Email,Teléfono,Ciudad,RFC\n"Empresa Ejemplo S.A.",contacto@empresa.com,555-1234,CDMX,EEJ010101ABC'
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'plantilla-clientes.csv'
+    a.click()
+  }
+
   const openCustomerDetail = async (customer: Customer) => {
     setViewCustomer(customer)
     setLoadingSales(true)
@@ -98,9 +199,17 @@ export default function ClientesPage() {
           <h1 className="page-title">Clientes</h1>
           <p className="text-xs text-text-tertiary mt-0.5">{customers.length} clientes registrados</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary btn">
-          <Plus className="w-4 h-4" /> Nuevo cliente
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={exportCSV} className="btn-secondary btn btn-sm">
+            <Download className="w-3.5 h-3.5" /> Exportar
+          </button>
+          <button onClick={() => setShowImport(true)} className="btn-secondary btn btn-sm">
+            <Upload className="w-3.5 h-3.5" /> Importar
+          </button>
+          <button onClick={() => setShowModal(true)} className="btn-primary btn">
+            <Plus className="w-4 h-4" /> Nuevo cliente
+          </button>
+        </div>
       </div>
 
       {/* Summary */}
@@ -199,11 +308,20 @@ export default function ClientesPage() {
                     <p className="text-text-tertiary">Crédito</p>
                     <p className="font-semibold text-text-primary">{formatCurrency(customer.credit_limit)}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-text-tertiary">Saldo</p>
-                    <p className={`font-semibold ${customer.balance > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                      {formatCurrency(customer.balance)}
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openEdit(customer) }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-surface-3 text-text-tertiary hover:text-text-primary"
+                      title="Editar cliente"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="text-right">
+                      <p className="text-text-tertiary">Saldo</p>
+                      <p className={`font-semibold ${customer.balance > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                          {formatCurrency(customer.balance)}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -212,7 +330,122 @@ export default function ClientesPage() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Edit modal */}
+      {editCustomer && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setEditCustomer(null)}>
+          <div className="modal">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="font-semibold text-text-primary">Editar cliente</h2>
+              <button onClick={() => setEditCustomer(null)} className="btn-ghost btn p-1.5"><X className="w-4 h-4" /></button>
+            </div>
+            <form onSubmit={handleUpdateCustomer} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="label">Nombre *</label>
+                  <input type="text" value={editForm.name} onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value }))} className="input" required />
+                </div>
+                <div>
+                  <label className="label">Email</label>
+                  <input type="email" value={editForm.email} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} className="input" placeholder="contacto@empresa.com" />
+                </div>
+                <div>
+                  <label className="label">Teléfono</label>
+                  <input type="tel" value={editForm.phone} onChange={(e) => setEditForm(f => ({ ...f, phone: e.target.value }))} className="input" placeholder="55 1234 5678" />
+                </div>
+                <div>
+                  <label className="label">RFC</label>
+                  <input type="text" value={editForm.rfc} onChange={(e) => setEditForm(f => ({ ...f, rfc: e.target.value.toUpperCase() }))} className="input" placeholder="XAXX010101000" />
+                </div>
+                <div>
+                  <label className="label">Ciudad</label>
+                  <input type="text" value={editForm.city} onChange={(e) => setEditForm(f => ({ ...f, city: e.target.value }))} className="input" placeholder="CDMX" />
+                </div>
+                <div className="col-span-2">
+                  <label className="label">Dirección</label>
+                  <input type="text" value={editForm.address} onChange={(e) => setEditForm(f => ({ ...f, address: e.target.value }))} className="input" placeholder="Calle, Número, Colonia" />
+                </div>
+                <div>
+                  <label className="label">Límite de crédito</label>
+                  <input type="number" min="0" step="100" value={editForm.credit_limit} onChange={(e) => setEditForm(f => ({ ...f, credit_limit: e.target.value }))} className="input" />
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setEditCustomer(null)} className="btn-secondary btn flex-1">Cancelar</button>
+                <button type="submit" disabled={saving} className="btn-primary btn flex-1">
+                  {saving ? 'Guardando...' : 'Guardar cambios'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Import modal */}
+      {showImport && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowImport(false)}>
+          <div className="modal w-full max-w-xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div>
+                <h2 className="font-semibold text-text-primary">Importar clientes desde CSV</h2>
+                <p className="text-xs text-text-tertiary mt-0.5">Columnas: Nombre, Email, Teléfono, Ciudad, RFC</p>
+              </div>
+              <button onClick={() => setShowImport(false)} className="btn-ghost btn p-1.5"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-surface-2 border border-dashed border-border rounded-xl p-6 flex flex-col items-center gap-3 text-center">
+                <FileSpreadsheet className="w-8 h-8 text-text-tertiary opacity-50" />
+                <div>
+                  <p className="text-sm text-text-secondary">Arrastra tu archivo CSV o</p>
+                  <label className="text-accent text-sm cursor-pointer hover:underline">
+                    selecciona un archivo
+                    <input type="file" accept=".csv" onChange={handleCSVFile} className="hidden" />
+                  </label>
+                </div>
+                <button onClick={downloadTemplate} className="btn-secondary btn btn-sm text-xs">
+                  <Download className="w-3 h-3" /> Descargar plantilla
+                </button>
+              </div>
+
+              {importPreview.length > 0 && (
+                <div>
+                  <p className="text-xs text-text-tertiary mb-2">{importPreview.length} clientes listos para importar:</p>
+                  <div className="max-h-48 overflow-y-auto table-container">
+                    <table className="table text-xs">
+                      <thead><tr><th>Nombre</th><th>Email</th><th>Teléfono</th><th>Ciudad</th></tr></thead>
+                      <tbody>
+                        {importPreview.slice(0, 15).map((r, i) => (
+                          <tr key={i}>
+                            <td className="font-medium">{r.name}</td>
+                            <td className="text-text-tertiary">{r.email || '—'}</td>
+                            <td className="text-text-tertiary">{r.phone || '—'}</td>
+                            <td className="text-text-tertiary">{r.city || '—'}</td>
+                          </tr>
+                        ))}
+                        {importPreview.length > 15 && (
+                          <tr><td colSpan={4} className="text-center text-text-tertiary py-2">...y {importPreview.length - 15} más</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button type="button" onClick={() => { setShowImport(false); setImportPreview([]) }} className="btn-secondary btn flex-1">Cancelar</button>
+                <button
+                  onClick={handleImportCustomers}
+                  disabled={importing || importPreview.length === 0}
+                  className="btn-primary btn flex-1"
+                >
+                  {importing ? 'Importando...' : `Importar ${importPreview.length} clientes`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create modal */}
       {showModal && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
           <div className="modal">

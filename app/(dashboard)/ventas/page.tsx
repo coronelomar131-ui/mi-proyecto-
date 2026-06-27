@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
-import { Plus, Search, X, ShoppingCart, Package, ArrowUpDown, ArrowUp, ArrowDown, Download, Eye, ChevronRight, Printer } from 'lucide-react'
+import { Plus, Search, X, ShoppingCart, Package, ArrowUpDown, ArrowUp, ArrowDown, Download, Eye, ChevronRight, Printer, Truck } from 'lucide-react'
 import Link from 'next/link'
 import { EmptyState } from '@/components/ui/empty-state'
 import { TableSkeleton } from '@/components/ui/skeleton'
@@ -128,6 +128,10 @@ export default function VentasPage() {
     const tax = subtotal * 0.16
     const total = subtotal + tax
 
+    // Generate sequential folio
+    const { count: saleCount } = await supabase.from('sales').select('id', { count: 'exact' })
+    const folio = `VTA-${String((saleCount ?? 0) + 1).padStart(5, '0')}`
+
     const { data: saleData, error } = await supabase.from('sales').insert({
       customer_id: selectedCustomer.id,
       status: 'pendiente',
@@ -136,7 +140,7 @@ export default function VentasPage() {
       discount: 0,
       tax,
       total,
-      folio: `VTA-${Date.now()}`,
+      folio,
     }).select().single()
 
     if (error) {
@@ -175,6 +179,19 @@ export default function VentasPage() {
       .eq('sale_id', sale.id)
     setSaleItems((data as (SaleItem & { product: { name: string; sku: string } })[]) ?? [])
     setLoadingItems(false)
+  }
+
+  const handleCreateDelivery = async (sale: Sale) => {
+    const customer = sale.customer as unknown as { address?: string; city?: string }
+    const address = [customer?.address, customer?.city].filter(Boolean).join(', ') || 'Dirección por definir'
+    const { error } = await supabase.from('deliveries').insert({
+      sale_id: sale.id,
+      status: 'pendiente',
+      address,
+      scheduled_date: new Date().toISOString().split('T')[0],
+    })
+    if (error) toast.error('Error al crear entrega')
+    else toast.success('Entrega creada. Puedes verla en el módulo de Entregas.')
   }
 
   const handleUpdateSaleStatus = async (saleId: string, status: SaleStatus) => {
@@ -525,16 +542,25 @@ export default function VentasPage() {
               {viewSale.status !== 'cancelada' && viewSale.status !== 'entregada' && (
                 <div className="border-t border-border pt-4">
                   <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-3">Avanzar estado</p>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {viewSale.status === 'pendiente' && (
                       <button onClick={() => handleUpdateSaleStatus(viewSale.id, 'confirmada')} className="btn-primary btn btn-sm flex-1">
                         <ChevronRight className="w-3.5 h-3.5" /> Confirmar
                       </button>
                     )}
                     {viewSale.status === 'confirmada' && (
-                      <button onClick={() => handleUpdateSaleStatus(viewSale.id, 'entregada')} className="btn-primary btn btn-sm flex-1">
-                        <ChevronRight className="w-3.5 h-3.5" /> Marcar entregada
-                      </button>
+                      <>
+                        <button onClick={() => handleUpdateSaleStatus(viewSale.id, 'entregada')} className="btn-primary btn btn-sm flex-1">
+                          <ChevronRight className="w-3.5 h-3.5" /> Marcar entregada
+                        </button>
+                        <button
+                          onClick={() => handleCreateDelivery(viewSale)}
+                          className="btn btn-sm bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20"
+                          title="Crear entrega en el módulo de entregas"
+                        >
+                          <Truck className="w-3.5 h-3.5" /> Crear entrega
+                        </button>
+                      </>
                     )}
                     <button onClick={() => handleUpdateSaleStatus(viewSale.id, 'cancelada')} className="btn-danger btn btn-sm">
                       Cancelar

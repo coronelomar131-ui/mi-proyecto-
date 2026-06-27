@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatNumber } from '@/lib/utils/format'
-import { Plus, Search, X, AlertTriangle, Package, Download, Edit2, TrendingUp, TrendingDown } from 'lucide-react'
+import { Plus, Search, X, AlertTriangle, Package, Download, Edit2, TrendingUp, TrendingDown, Upload, FileSpreadsheet } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -32,6 +32,9 @@ export default function InventarioPage() {
     name: '', description: '', unit: 'pieza',
     cost_price: '', sale_price: '', min_stock: '',
   })
+  const [showImport, setShowImport] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importPreview, setImportPreview] = useState<{ sku: string; name: string; sale_price: number; stock: number }[]>([])
 
   const fetchProducts = useCallback(async () => {
     setLoading(true)
@@ -125,6 +128,64 @@ export default function InventarioPage() {
     setSaving(false)
   }
 
+  const handleCSVFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string
+      const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
+      if (lines.length < 2) { toast.error('El archivo está vacío o no tiene datos'); return }
+      // Try to detect header and parse
+      const rows = lines.slice(1).map((line) => {
+        const cols = line.split(',').map((c) => c.replace(/^"|"$/g, '').trim())
+        return {
+          sku: cols[0] ?? '',
+          name: cols[1] ?? '',
+          sale_price: parseFloat(cols[2]) || 0,
+          stock: parseInt(cols[3]) || 0,
+        }
+      }).filter((r) => r.sku && r.name)
+      setImportPreview(rows)
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
+  const handleImportProducts = async () => {
+    if (importPreview.length === 0) return
+    setImporting(true)
+    let success = 0; let failed = 0
+    for (const row of importPreview) {
+      const { error } = await supabase.from('products').insert({
+        sku: row.sku,
+        name: row.name,
+        sale_price: row.sale_price,
+        stock: row.stock,
+        cost_price: 0,
+        unit: 'pieza',
+        min_stock: 5,
+        is_active: true,
+      })
+      if (error) failed++
+      else success++
+    }
+    toast.success(`${success} productos importados${failed > 0 ? `, ${failed} con errores (SKU duplicado)` : ''}`)
+    setShowImport(false)
+    setImportPreview([])
+    fetchProducts()
+    setImporting(false)
+  }
+
+  const downloadTemplate = () => {
+    const csv = 'SKU,Nombre,Precio de venta,Stock\nPROD-001,Ejemplo de producto,100.00,50'
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'plantilla-productos.csv'
+    a.click()
+  }
+
   const getStockStatus = (p: Product) => {
     if (p.stock === 0) return { label: 'Agotado', class: 'badge-red' }
     if (p.stock <= p.min_stock) return { label: 'Stock bajo', class: 'badge-yellow' }
@@ -155,6 +216,9 @@ export default function InventarioPage() {
             className="btn-secondary btn btn-sm"
           >
             <Download className="w-3.5 h-3.5" /> Exportar
+          </button>
+          <button onClick={() => setShowImport(true)} className="btn-secondary btn btn-sm">
+            <Upload className="w-3.5 h-3.5" /> Importar CSV
           </button>
           <button onClick={() => setShowModal(true)} className="btn-primary btn">
             <Plus className="w-4 h-4" /> Nuevo producto
@@ -387,6 +451,71 @@ export default function InventarioPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Import modal */}
+      {showImport && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowImport(false)}>
+          <div className="modal w-full max-w-xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div>
+                <h2 className="font-semibold text-text-primary">Importar productos desde CSV</h2>
+                <p className="text-xs text-text-tertiary mt-0.5">Columnas: SKU, Nombre, Precio de venta, Stock</p>
+              </div>
+              <button onClick={() => setShowImport(false)} className="btn-ghost btn p-1.5"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-surface-2 border border-dashed border-border rounded-xl p-6 flex flex-col items-center gap-3 text-center">
+                <FileSpreadsheet className="w-8 h-8 text-text-tertiary opacity-50" />
+                <div>
+                  <p className="text-sm text-text-secondary">Arrastra tu archivo CSV o</p>
+                  <label className="text-accent text-sm cursor-pointer hover:underline">
+                    selecciona un archivo
+                    <input type="file" accept=".csv" onChange={handleCSVFile} className="hidden" />
+                  </label>
+                </div>
+                <button onClick={downloadTemplate} className="btn-secondary btn btn-sm text-xs">
+                  <Download className="w-3 h-3" /> Descargar plantilla
+                </button>
+              </div>
+
+              {importPreview.length > 0 && (
+                <div>
+                  <p className="text-xs text-text-tertiary mb-2">{importPreview.length} productos listos para importar:</p>
+                  <div className="max-h-48 overflow-y-auto table-container">
+                    <table className="table text-xs">
+                      <thead><tr><th>SKU</th><th>Nombre</th><th>Precio</th><th>Stock</th></tr></thead>
+                      <tbody>
+                        {importPreview.slice(0, 20).map((r, i) => (
+                          <tr key={i}>
+                            <td className="font-mono text-accent">{r.sku}</td>
+                            <td>{r.name}</td>
+                            <td>{formatCurrency(r.sale_price)}</td>
+                            <td>{formatNumber(r.stock)}</td>
+                          </tr>
+                        ))}
+                        {importPreview.length > 20 && (
+                          <tr><td colSpan={4} className="text-center text-text-tertiary py-2">...y {importPreview.length - 20} más</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button type="button" onClick={() => { setShowImport(false); setImportPreview([]) }} className="btn-secondary btn flex-1">Cancelar</button>
+                <button
+                  onClick={handleImportProducts}
+                  disabled={importing || importPreview.length === 0}
+                  className="btn-primary btn flex-1"
+                >
+                  {importing ? 'Importando...' : `Importar ${importPreview.length} productos`}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
