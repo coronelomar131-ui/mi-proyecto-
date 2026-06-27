@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatNumber } from '@/lib/utils/format'
-import { Plus, Search, X, AlertTriangle, Package, Download, Edit2, TrendingUp, TrendingDown, Upload, FileSpreadsheet } from 'lucide-react'
+import { Plus, Search, X, AlertTriangle, Package, Download, Edit2, TrendingUp, TrendingDown, Upload, FileSpreadsheet, Percent } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -38,6 +38,11 @@ export default function InventarioPage() {
   const [showImport, setShowImport] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importPreview, setImportPreview] = useState<{ sku: string; name: string; sale_price: number; stock: number }[]>([])
+  const [showBulkPrice, setShowBulkPrice] = useState(false)
+  const [bulkCategory, setBulkCategory] = useState('')
+  const [bulkPct, setBulkPct] = useState('')
+  const [bulkField, setBulkField] = useState<'sale_price' | 'cost_price'>('sale_price')
+  const [savingBulk, setSavingBulk] = useState(false)
 
   const searchParams = useSearchParams()
 
@@ -200,6 +205,28 @@ export default function InventarioPage() {
     a.click()
   }
 
+  const handleBulkPriceUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const pct = parseFloat(bulkPct)
+    if (isNaN(pct) || pct === 0) { toast.error('Ingresa un porcentaje válido'); return }
+    setSavingBulk(true)
+    const targets = bulkCategory
+      ? products.filter((p) => p.category_id === bulkCategory)
+      : products
+    let updated = 0
+    for (const p of targets) {
+      const currentVal = bulkField === 'sale_price' ? p.sale_price : p.cost_price
+      const newVal = Math.round(currentVal * (1 + pct / 100) * 100) / 100
+      const { error } = await supabase.from('products').update({ [bulkField]: newVal }).eq('id', p.id)
+      if (!error) updated++
+    }
+    toast.success(`${updated} productos actualizados`)
+    setShowBulkPrice(false)
+    setBulkPct('')
+    fetchProducts()
+    setSavingBulk(false)
+  }
+
   const getStockStatus = (p: Product) => {
     if (p.stock === 0) return { label: 'Agotado', class: 'badge-red' }
     if (p.stock <= p.min_stock) return { label: 'Stock bajo', class: 'badge-yellow' }
@@ -230,6 +257,9 @@ export default function InventarioPage() {
             className="btn-secondary btn btn-sm"
           >
             <Download className="w-3.5 h-3.5" /> Exportar
+          </button>
+          <button onClick={() => setShowBulkPrice(true)} className="btn-secondary btn btn-sm">
+            <Percent className="w-3.5 h-3.5" /> Actualizar precios
           </button>
           <button onClick={() => setShowImport(true)} className="btn-secondary btn btn-sm">
             <Upload className="w-3.5 h-3.5" /> Importar CSV
@@ -626,6 +656,78 @@ export default function InventarioPage() {
                 <button type="button" onClick={() => setShowModal(false)} className="btn-secondary btn flex-1">Cancelar</button>
                 <button type="submit" disabled={saving} className="btn-primary btn flex-1">
                   {saving ? 'Guardando...' : 'Crear producto'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Bulk price update modal */}
+      {showBulkPrice && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowBulkPrice(false)}>
+          <div className="modal w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="font-semibold text-text-primary flex items-center gap-2">
+                <Percent className="w-4 h-4 text-accent" />
+                Actualización masiva de precios
+              </h2>
+              <button onClick={() => setShowBulkPrice(false)} className="btn-ghost btn p-1.5"><X className="w-4 h-4" /></button>
+            </div>
+            <form onSubmit={handleBulkPriceUpdate} className="p-6 space-y-5">
+              <div>
+                <label className="label">Campo a actualizar</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBulkField('sale_price')}
+                    className={cn('flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all', bulkField === 'sale_price' ? 'bg-accent/10 border-accent/30 text-accent' : 'border-border text-text-secondary hover:text-text-primary')}
+                  >
+                    Precio de venta
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkField('cost_price')}
+                    className={cn('flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all', bulkField === 'cost_price' ? 'bg-accent/10 border-accent/30 text-accent' : 'border-border text-text-secondary hover:text-text-primary')}
+                  >
+                    Precio de costo
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="label">Categoría (opcional)</label>
+                <select value={bulkCategory} onChange={(e) => setBulkCategory(e.target.value)} className="input">
+                  <option value="">Todos los productos ({products.length})</option>
+                  {categories.map((cat) => {
+                    const count = products.filter((p) => p.category_id === cat.id).length
+                    return <option key={cat.id} value={cat.id}>{cat.name} ({count})</option>
+                  })}
+                </select>
+              </div>
+              <div>
+                <label className="label">Porcentaje de cambio</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={bulkPct}
+                    onChange={(e) => setBulkPct(e.target.value)}
+                    placeholder="ej. 5 para +5%, -3 para -3%"
+                    className="input pr-8"
+                    required
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary text-sm">%</span>
+                </div>
+                {bulkPct && !isNaN(parseFloat(bulkPct)) && (
+                  <p className="text-xs text-text-tertiary mt-1.5">
+                    Se actualizarán {bulkCategory ? products.filter(p => p.category_id === bulkCategory).length : products.length} productos
+                    {parseFloat(bulkPct) > 0 ? ` aumentando` : ` reduciendo`} {Math.abs(parseFloat(bulkPct))}%
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowBulkPrice(false)} className="btn-secondary btn flex-1">Cancelar</button>
+                <button type="submit" disabled={savingBulk || !bulkPct} className="btn-primary btn flex-1">
+                  {savingBulk ? 'Actualizando...' : 'Aplicar cambio'}
                 </button>
               </div>
             </form>

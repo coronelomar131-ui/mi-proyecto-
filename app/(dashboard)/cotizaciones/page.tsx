@@ -48,6 +48,7 @@ export default function CotizacionesPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true)
+    const today = new Date().toISOString().split('T')[0]
     const [{ data: qData }, { data: cData }, { data: pData }] = await Promise.all([
       supabase.from('quotes').select('*, customer:customers(name)').order('created_at', { ascending: false }).limit(50),
       supabase.from('customers').select('*').eq('is_active', true).order('name'),
@@ -57,6 +58,15 @@ export default function CotizacionesPage() {
     setCustomers((cData as Customer[]) ?? [])
     setProducts((pData as Product[]) ?? [])
     setLoading(false)
+
+    // Auto-expire quotes past their valid_until date
+    const toExpire = (qData ?? []).filter(
+      (q: Quote) => q.valid_until && q.valid_until < today && (q.status === 'borrador' || q.status === 'enviada')
+    )
+    if (toExpire.length > 0) {
+      await supabase.from('quotes').update({ status: 'vencida' }).in('id', toExpire.map((q: Quote) => q.id))
+      setQuotes((prev) => prev.map((q) => toExpire.find((e: Quote) => e.id === q.id) ? { ...q, status: 'vencida' as const } : q))
+    }
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])

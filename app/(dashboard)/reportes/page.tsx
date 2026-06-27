@@ -42,18 +42,22 @@ export default function ReportesPage() {
   const [productMargins, setProductMargins] = useState<{ name: string; revenue: number; cost: number; margin: number }[]>([])
   const [topCustomers, setTopCustomers] = useState<{ name: string; value: number; orders: number }[]>([])
   const [customerSegments, setCustomerSegments] = useState<{ name: string; value: number }[]>([])
+  const [paymentMethods, setPaymentMethods] = useState<{ name: string; value: number; orders: number }[]>([])
   const [summary, setSummary] = useState({ totalRevenue: 0, totalOrders: 0, avgOrder: 0, uniqueCustomers: 0 })
+  const [prevSummary, setPrevSummary] = useState({ totalRevenue: 0, totalOrders: 0 })
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async (days: number) => {
     setLoading(true)
     const since = subDays(new Date(), days).toISOString()
 
-    const [{ data: salesRaw }, { data: itemsRaw }, { data: customersRaw }, { data: salesWithCustomer }] = await Promise.all([
-      supabase.from('sales').select('id, total, created_at, status, customer_id').gte('created_at', since).neq('status', 'cancelada'),
+    const prevSince = subDays(new Date(), days * 2).toISOString()
+    const [{ data: salesRaw }, { data: itemsRaw }, { data: customersRaw }, { data: salesWithCustomer }, { data: prevSalesRaw }] = await Promise.all([
+      supabase.from('sales').select('id, total, created_at, status, customer_id, payment_method').gte('created_at', since).neq('status', 'cancelada'),
       supabase.from('sale_items').select('quantity, subtotal, unit_price, product:products(name, cost_price)').limit(1000),
       supabase.from('customers').select('city, is_active').eq('is_active', true),
       supabase.from('sales').select('total, customer_id, customer:customers(name)').gte('created_at', since).neq('status', 'cancelada').limit(500),
+      supabase.from('sales').select('total').gte('created_at', prevSince).lt('created_at', since).neq('status', 'cancelada'),
     ])
 
     // Summary KPIs
@@ -62,6 +66,20 @@ export default function ReportesPage() {
     const totalOrders = validSales.length
     const uniqueCustomers = new Set(validSales.map((s) => s.customer_id)).size
     setSummary({ totalRevenue, totalOrders, avgOrder: totalOrders > 0 ? totalRevenue / totalOrders : 0, uniqueCustomers })
+
+    const prevRevenue = (prevSalesRaw ?? []).reduce((s, r) => s + (r.total ?? 0), 0)
+    setPrevSummary({ totalRevenue: prevRevenue, totalOrders: (prevSalesRaw ?? []).length })
+
+    // Payment method breakdown
+    const pmMap: Record<string, { value: number; orders: number }> = {}
+    validSales.forEach((s) => {
+      const pm = (s.payment_method as string) ?? 'efectivo'
+      if (!pmMap[pm]) pmMap[pm] = { value: 0, orders: 0 }
+      pmMap[pm].value += s.total ?? 0
+      pmMap[pm].orders += 1
+    })
+    const PM_LABELS: Record<string, string> = { efectivo: 'Efectivo', transferencia: 'Transferencia', credito: 'Crédito', cheque: 'Cheque' }
+    setPaymentMethods(Object.entries(pmMap).map(([k, v]) => ({ name: PM_LABELS[k] ?? k, value: v.value, orders: v.orders })).sort((a, b) => b.value - a.value))
 
     // Daily sales chart — show last N days up to 30 buckets
     const buckets = Math.min(days, 30)
@@ -155,20 +173,29 @@ export default function ReportesPage() {
 
       {/* Summary KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {[
-          { label: 'Ingresos totales', value: loading ? '—' : formatCurrency(summary.totalRevenue), icon: DollarSign, color: 'text-accent', bg: 'bg-accent/10' },
-          { label: 'Pedidos', value: loading ? '—' : formatNumber(summary.totalOrders), icon: ShoppingCart, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-          { label: 'Ticket promedio', value: loading ? '—' : formatCurrency(summary.avgOrder), icon: TrendingUp, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-          { label: 'Clientes únicos', value: loading ? '—' : formatNumber(summary.uniqueCustomers), icon: Users, color: 'text-purple-400', bg: 'bg-purple-500/10' },
-        ].map((k) => (
-          <div key={k.label} className="card p-4">
-            <div className={`w-8 h-8 rounded-lg ${k.bg} flex items-center justify-center mb-3`}>
-              <k.icon className={`w-4 h-4 ${k.color}`} />
+        {(() => {
+          const revChange = prevSummary.totalRevenue > 0 ? ((summary.totalRevenue - prevSummary.totalRevenue) / prevSummary.totalRevenue) * 100 : null
+          const ordChange = prevSummary.totalOrders > 0 ? ((summary.totalOrders - prevSummary.totalOrders) / prevSummary.totalOrders) * 100 : null
+          return [
+            { label: 'Ingresos totales', value: loading ? '—' : formatCurrency(summary.totalRevenue), icon: DollarSign, color: 'text-accent', bg: 'bg-accent/10', change: revChange },
+            { label: 'Pedidos', value: loading ? '—' : formatNumber(summary.totalOrders), icon: ShoppingCart, color: 'text-emerald-400', bg: 'bg-emerald-500/10', change: ordChange },
+            { label: 'Ticket promedio', value: loading ? '—' : formatCurrency(summary.avgOrder), icon: TrendingUp, color: 'text-blue-400', bg: 'bg-blue-500/10', change: null },
+            { label: 'Clientes únicos', value: loading ? '—' : formatNumber(summary.uniqueCustomers), icon: Users, color: 'text-purple-400', bg: 'bg-purple-500/10', change: null },
+          ].map((k) => (
+            <div key={k.label} className="card p-4">
+              <div className={`w-8 h-8 rounded-lg ${k.bg} flex items-center justify-center mb-3`}>
+                <k.icon className={`w-4 h-4 ${k.color}`} />
+              </div>
+              <p className="text-xl font-bold text-text-primary">{k.value}</p>
+              <p className="text-xs text-text-tertiary mt-0.5">{k.label}</p>
+              {k.change != null && (
+                <p className={cn('text-xs mt-1 font-medium', k.change >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                  {k.change >= 0 ? '+' : ''}{k.change.toFixed(1)}% vs periodo anterior
+                </p>
+              )}
             </div>
-            <p className="text-xl font-bold text-text-primary">{k.value}</p>
-            <p className="text-xs text-text-tertiary mt-0.5">{k.label}</p>
-          </div>
-        ))}
+          ))
+        })()}
       </div>
 
       <div className="space-y-6">
@@ -250,6 +277,54 @@ export default function ReportesPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Payment method breakdown */}
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-5">
+            <DollarSign className="w-4 h-4 text-accent" />
+            <h3 className="text-sm font-semibold text-text-primary">Ventas por método de pago</h3>
+          </div>
+          {paymentMethods.length === 0 ? (
+            <div className="flex items-center justify-center py-8 text-text-tertiary text-sm">Sin datos suficientes</div>
+          ) : (
+            <div className="grid lg:grid-cols-2 gap-6 items-center">
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={paymentMethods} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} paddingAngle={3}>
+                    {paymentMethods.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                  <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs text-text-secondary">{v}</span>} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-3">
+                {paymentMethods.map((pm, i) => {
+                  const total = paymentMethods.reduce((s, p) => s + p.value, 0)
+                  const pct = total > 0 ? (pm.value / total) * 100 : 0
+                  return (
+                    <div key={pm.name} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                          <span className="text-text-primary font-medium">{pm.name}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-text-primary font-semibold">{formatCurrency(pm.value)}</span>
+                          <span className="text-text-tertiary ml-2">{pm.orders} ped.</span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 bg-surface-3 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${pct.toFixed(0)}%`, background: COLORS[i % COLORS.length] }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Gross margin by product */}
