@@ -1,0 +1,197 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { formatCurrency, formatShortDate } from '@/lib/utils/format'
+import {
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts'
+import { BarChart3, TrendingUp, Package, Users } from 'lucide-react'
+import { subDays } from 'date-fns'
+
+const ACCENT = '#00C4D4'
+const COLORS = ['#00C4D4', '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number; name: string }[]; label?: string }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-surface-2 border border-border rounded-lg px-3 py-2 text-xs shadow-card">
+      <p className="text-text-secondary mb-1">{label}</p>
+      {payload.map((p, i) => (
+        <p key={i} className="text-text-primary font-medium">
+          {p.name}: {typeof p.value === 'number' && p.value > 1000 ? formatCurrency(p.value) : p.value}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+export default function ReportesPage() {
+  const supabase = createClient()
+  const [salesData, setSalesData] = useState<{ name: string; ventas: number; pedidos: number }[]>([])
+  const [topProducts, setTopProducts] = useState<{ name: string; value: number }[]>([])
+  const [customerSegments, setCustomerSegments] = useState<{ name: string; value: number }[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    const last30Days = subDays(new Date(), 30).toISOString()
+
+    const [{ data: salesRaw }, { data: itemsRaw }, { data: customersRaw }] = await Promise.all([
+      supabase.from('sales').select('total, created_at, status').gte('created_at', last30Days).neq('status', 'cancelada'),
+      supabase.from('sale_items').select('quantity, subtotal, product:products(name)').limit(500),
+      supabase.from('customers').select('city, is_active').eq('is_active', true),
+    ])
+
+    // Daily sales chart
+    const dayMap: Record<string, { ventas: number; pedidos: number }> = {}
+    for (let i = 6; i >= 0; i--) {
+      const d = subDays(new Date(), i)
+      const key = formatShortDate(d)
+      dayMap[key] = { ventas: 0, pedidos: 0 }
+    }
+    salesRaw?.forEach((s) => {
+      const key = formatShortDate(s.created_at)
+      if (dayMap[key]) {
+        dayMap[key].ventas += s.total ?? 0
+        dayMap[key].pedidos += 1
+      }
+    })
+    setSalesData(Object.entries(dayMap).map(([name, v]) => ({ name, ...v })))
+
+    // Top products by revenue
+    const productMap: Record<string, number> = {}
+    itemsRaw?.forEach((item) => {
+      const name = (item.product as unknown as { name: string })?.name ?? 'Desconocido'
+      productMap[name] = (productMap[name] ?? 0) + (item.subtotal ?? 0)
+    })
+    const sorted = Object.entries(productMap).sort((a, b) => b[1] - a[1]).slice(0, 5)
+    setTopProducts(sorted.map(([name, value]) => ({ name: name.slice(0, 20), value })))
+
+    // Customer by city
+    const cityMap: Record<string, number> = {}
+    customersRaw?.forEach((c) => {
+      const city = (c.city as string) ?? 'Sin ciudad'
+      cityMap[city] = (cityMap[city] ?? 0) + 1
+    })
+    const citySorted = Object.entries(cityMap).sort((a, b) => b[1] - a[1]).slice(0, 5)
+    setCustomerSegments(citySorted.map(([name, value]) => ({ name, value })))
+
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <span className="w-8 h-8 border-2 border-border border-t-accent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="animate-fade-in">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Reportes</h1>
+          <p className="text-xs text-text-tertiary mt-0.5">Últimos 30 días</p>
+        </div>
+        <button onClick={fetchData} className="btn-secondary btn btn-sm">Actualizar</button>
+      </div>
+
+      <div className="space-y-6">
+        {/* Sales trend */}
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-5">
+            <TrendingUp className="w-4 h-4 text-accent" />
+            <h3 className="text-sm font-semibold text-text-primary">Ventas últimos 7 días</h3>
+          </div>
+          <ResponsiveContainer width="100%" height={240}>
+            <AreaChart data={salesData}>
+              <defs>
+                <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={ACCENT} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={ACCENT} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="name" tick={{ fill: '#5E5E6E', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#5E5E6E', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+              <Tooltip content={<CustomTooltip />} />
+              <Area type="monotone" dataKey="ventas" name="Ventas" stroke={ACCENT} strokeWidth={2} fill="url(#colorVentas)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Top products */}
+          <div className="card p-5">
+            <div className="flex items-center gap-2 mb-5">
+              <Package className="w-4 h-4 text-accent" />
+              <h3 className="text-sm font-semibold text-text-primary">Top 5 productos por venta</h3>
+            </div>
+            {topProducts.length === 0 ? (
+              <div className="flex items-center justify-center py-12 text-text-tertiary text-sm">Sin datos suficientes</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={topProducts} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                  <XAxis type="number" tick={{ fill: '#5E5E6E', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                  <YAxis type="category" dataKey="name" tick={{ fill: '#9898A8', fontSize: 10 }} axisLine={false} tickLine={false} width={90} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="value" name="Ingresos" fill={ACCENT} radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Customer distribution */}
+          <div className="card p-5">
+            <div className="flex items-center gap-2 mb-5">
+              <Users className="w-4 h-4 text-accent" />
+              <h3 className="text-sm font-semibold text-text-primary">Clientes por ciudad</h3>
+            </div>
+            {customerSegments.length === 0 ? (
+              <div className="flex items-center justify-center py-12 text-text-tertiary text-sm">Sin datos</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={customerSegments} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value">
+                    {customerSegments.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend
+                    iconType="circle"
+                    iconSize={8}
+                    formatter={(value) => <span style={{ color: '#9898A8', fontSize: 11 }}>{value}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Orders bar */}
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-5">
+            <BarChart3 className="w-4 h-4 text-accent" />
+            <h3 className="text-sm font-semibold text-text-primary">Pedidos por día (últimos 7 días)</h3>
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={salesData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="name" tick={{ fill: '#5E5E6E', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#5E5E6E', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="pedidos" name="Pedidos" fill="#6366f1" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  )
+}
