@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate, initials } from '@/lib/utils/format'
-import { Plus, Search, X, Phone, Mail, MapPin, CreditCard, Users, TrendingUp, AlertCircle, Eye, ShoppingCart, Building2, Download, Upload, FileSpreadsheet, Edit2, MessageCircle } from 'lucide-react'
+import { Plus, Search, X, Phone, Mail, MapPin, CreditCard, Users, TrendingUp, AlertCircle, Eye, ShoppingCart, Building2, Download, Upload, FileSpreadsheet, Edit2, MessageCircle, Wallet, ChevronDown, ChevronUp } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { EmptyState } from '@/components/ui/empty-state'
 import { cn } from '@/lib/utils/cn'
@@ -42,6 +42,7 @@ export default function ClientesPage() {
   const [registeringPayment, setRegisteringPayment] = useState(false)
   const [tagInput, setTagInput] = useState('')
   const [savingTags, setSavingTags] = useState(false)
+  const [showCartera, setShowCartera] = useState(false)
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
@@ -299,6 +300,85 @@ export default function ClientesPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Cartera pendiente */}
+      {customers.filter(c => c.balance > 0).length > 0 && (
+        <div className="mb-5">
+          <button
+            onClick={() => setShowCartera(!showCartera)}
+            className="w-full flex items-center justify-between bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 hover:bg-amber-500/15 transition-colors group"
+          >
+            <div className="flex items-center gap-3">
+              <Wallet className="w-5 h-5 text-amber-400 shrink-0" />
+              <div className="text-left">
+                <p className="text-sm font-semibold text-amber-300">
+                  Cartera pendiente: {formatCurrency(customers.reduce((s, c) => s + c.balance, 0))}
+                </p>
+                <p className="text-xs text-amber-400/70">
+                  {customers.filter(c => c.balance > 0).length} clientes con saldo — clic para {showCartera ? 'ocultar' : 'ver'}
+                </p>
+              </div>
+            </div>
+            {showCartera ? <ChevronUp className="w-4 h-4 text-amber-400" /> : <ChevronDown className="w-4 h-4 text-amber-400" />}
+          </button>
+
+          {showCartera && (
+            <div className="mt-2 border border-border rounded-xl overflow-hidden">
+              <table className="table text-xs">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Ciudad</th>
+                    <th className="text-right">Saldo</th>
+                    <th className="text-right">Límite</th>
+                    <th className="text-center">% Usado</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {customers
+                    .filter(c => c.balance > 0)
+                    .sort((a, b) => b.balance - a.balance)
+                    .map((c) => {
+                      const pct = c.credit_limit > 0 ? Math.min(100, (c.balance / c.credit_limit) * 100) : 0
+                      const isOver = c.balance > c.credit_limit && c.credit_limit > 0
+                      return (
+                        <tr key={c.id} className="cursor-pointer" onClick={() => openCustomerDetail(c)}>
+                          <td className="font-medium text-text-primary">{c.name}</td>
+                          <td className="text-text-tertiary">{c.city ?? '—'}</td>
+                          <td className={cn('text-right font-semibold', isOver ? 'text-red-400' : 'text-amber-400')}>
+                            {formatCurrency(c.balance)}
+                          </td>
+                          <td className="text-right text-text-tertiary">{c.credit_limit > 0 ? formatCurrency(c.credit_limit) : '—'}</td>
+                          <td className="text-center">
+                            {c.credit_limit > 0 ? (
+                              <span className={cn('font-medium', isOver ? 'text-red-400' : pct > 80 ? 'text-amber-400' : 'text-text-secondary')}>
+                                {pct.toFixed(0)}%
+                              </span>
+                            ) : '—'}
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            {c.phone && (
+                              <a
+                                href={`https://wa.me/${c.phone.replace(/\D/g, '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-emerald-400 hover:text-emerald-300"
+                                title="WhatsApp"
+                              >
+                                <WhatsAppIcon className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

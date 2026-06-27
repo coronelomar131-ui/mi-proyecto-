@@ -39,6 +39,7 @@ export default function ReportesPage() {
   const [rangeDays, setRangeDays] = useState(30)
   const [salesData, setSalesData] = useState<{ name: string; ventas: number; pedidos: number }[]>([])
   const [topProducts, setTopProducts] = useState<{ name: string; value: number }[]>([])
+  const [productMargins, setProductMargins] = useState<{ name: string; revenue: number; cost: number; margin: number }[]>([])
   const [topCustomers, setTopCustomers] = useState<{ name: string; value: number; orders: number }[]>([])
   const [customerSegments, setCustomerSegments] = useState<{ name: string; value: number }[]>([])
   const [summary, setSummary] = useState({ totalRevenue: 0, totalOrders: 0, avgOrder: 0, uniqueCustomers: 0 })
@@ -50,7 +51,7 @@ export default function ReportesPage() {
 
     const [{ data: salesRaw }, { data: itemsRaw }, { data: customersRaw }, { data: salesWithCustomer }] = await Promise.all([
       supabase.from('sales').select('id, total, created_at, status, customer_id').gte('created_at', since).neq('status', 'cancelada'),
-      supabase.from('sale_items').select('quantity, subtotal, product:products(name)').limit(1000),
+      supabase.from('sale_items').select('quantity, subtotal, unit_price, product:products(name, cost_price)').limit(1000),
       supabase.from('customers').select('city, is_active').eq('is_active', true),
       supabase.from('sales').select('total, customer_id, customer:customers(name)').gte('created_at', since).neq('status', 'cancelada').limit(500),
     ])
@@ -79,14 +80,28 @@ export default function ReportesPage() {
     })
     setSalesData(Object.entries(dayMap).map(([name, v]) => ({ name, ...v })))
 
-    // Top products by revenue
-    const productMap: Record<string, number> = {}
+    // Top products by revenue + margin analysis
+    const productMap: Record<string, { revenue: number; cost: number }> = {}
     itemsRaw?.forEach((item) => {
-      const name = (item.product as unknown as { name: string })?.name ?? 'Desconocido'
-      productMap[name] = (productMap[name] ?? 0) + (item.subtotal ?? 0)
+      const prod = item.product as unknown as { name: string; cost_price: number }
+      const name = prod?.name ?? 'Desconocido'
+      if (!productMap[name]) productMap[name] = { revenue: 0, cost: 0 }
+      productMap[name].revenue += item.subtotal ?? 0
+      productMap[name].cost += (prod?.cost_price ?? 0) * (item.quantity ?? 0)
     })
-    const sorted = Object.entries(productMap).sort((a, b) => b[1] - a[1]).slice(0, 5)
-    setTopProducts(sorted.map(([name, value]) => ({ name: name.slice(0, 20), value })))
+    const sorted = Object.entries(productMap).sort((a, b) => b[1].revenue - a[1].revenue).slice(0, 5)
+    setTopProducts(sorted.map(([name, d]) => ({ name: name.slice(0, 20), value: d.revenue })))
+
+    const marginData = Object.entries(productMap)
+      .map(([name, d]) => ({
+        name: name.slice(0, 22),
+        revenue: d.revenue,
+        cost: d.cost,
+        margin: d.revenue > 0 ? ((d.revenue - d.cost) / d.revenue) * 100 : 0,
+      }))
+      .sort((a, b) => b.margin - a.margin)
+      .slice(0, 5)
+    setProductMargins(marginData)
 
     // Top customers by revenue
     const customerMap: Record<string, { value: number; orders: number }> = {}
@@ -235,6 +250,42 @@ export default function ReportesPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Gross margin by product */}
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-5">
+            <TrendingUp className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-sm font-semibold text-text-primary">Margen bruto por producto</h3>
+          </div>
+          {productMargins.length === 0 ? (
+            <div className="flex items-center justify-center py-8 text-text-tertiary text-sm">Sin datos suficientes</div>
+          ) : (
+            <div className="space-y-3">
+              {productMargins.map((p, i) => (
+                <div key={p.name} className="flex items-center gap-3">
+                  <span className="text-xs text-text-tertiary w-4 text-right shrink-0">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                      <span className="text-text-primary font-medium truncate max-w-[150px]">{p.name}</span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-text-tertiary">{formatCurrency(p.revenue)}</span>
+                        <span className={cn('font-semibold w-12 text-right', p.margin >= 40 ? 'text-emerald-400' : p.margin >= 20 ? 'text-amber-400' : 'text-red-400')}>
+                          {p.margin.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 bg-surface-3 rounded-full overflow-hidden">
+                      <div
+                        className={cn('h-full rounded-full', p.margin >= 40 ? 'bg-emerald-400' : p.margin >= 20 ? 'bg-amber-400' : 'bg-red-400')}
+                        style={{ width: `${Math.min(100, p.margin).toFixed(0)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Orders bar */}
