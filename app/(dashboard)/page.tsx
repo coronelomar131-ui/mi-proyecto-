@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatCurrency, formatNumber } from '@/lib/utils/format'
+import { formatCurrency, formatNumber, formatRelative } from '@/lib/utils/format'
 import {
   TrendingUp,
   ShoppingCart,
@@ -8,6 +8,7 @@ import {
   Truck,
   FileText,
   AlertTriangle,
+  ArrowRight,
 } from 'lucide-react'
 import Link from 'next/link'
 import { OnboardingChecklist } from '@/components/ui/onboarding-checklist'
@@ -65,6 +66,17 @@ async function getKPIs(orgId: string) {
   }
 }
 
+async function getRecentActivity(orgId: string) {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('sales')
+    .select('id, folio, total, status, created_at, customer:customers(name)')
+    .eq('organization_id', orgId)
+    .order('created_at', { ascending: false })
+    .limit(5)
+  return data ?? []
+}
+
 export default async function DashboardPage() {
   const supabase = createClient()
   const {
@@ -80,7 +92,9 @@ export default async function DashboardPage() {
     .single()
 
   const orgId = profile?.organization_id ?? ''
-  const kpis = orgId ? await getKPIs(orgId) : null
+  const [kpis, recentSales] = orgId
+    ? await Promise.all([getKPIs(orgId), getRecentActivity(orgId)])
+    : [null, []]
 
   const kpiCards = [
     {
@@ -145,7 +159,10 @@ export default async function DashboardPage() {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-text-primary">
-          Buenos días, {profile?.full_name?.split(' ')[0] ?? 'usuario'} 👋
+          {(() => {
+            const h = new Date().getHours()
+            return h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches'
+          })()}, {profile?.full_name?.split(' ')[0] ?? 'usuario'}
         </h1>
         <p className="text-text-tertiary text-sm mt-1">
           {new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}

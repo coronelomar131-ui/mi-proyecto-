@@ -3,9 +3,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
-import { Plus, Search, X, FileText, Package, Send } from 'lucide-react'
+import { Plus, Search, X, FileText, Package, Send, Download, ShoppingCart, CheckCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
+import { EmptyState } from '@/components/ui/empty-state'
+import { TableSkeleton } from '@/components/ui/skeleton'
 import type { Quote, Customer, Product, QuoteStatus } from '@/types'
 
 const STATUS_BADGE: Record<QuoteStatus, string> = {
@@ -124,6 +126,44 @@ export default function CotizacionesPage() {
     fetchData()
   }
 
+  const handleConvertToSale = async (quote: Quote) => {
+    setSaving(true)
+    const { data: items, error: itemsErr } = await supabase
+      .from('quote_items')
+      .select('*, product:products(id,sale_price)')
+      .eq('quote_id', quote.id)
+
+    if (itemsErr || !items) { toast.error('Error al obtener productos'); setSaving(false); return }
+
+    const { data: saleData, error: saleErr } = await supabase.from('sales').insert({
+      customer_id: quote.customer_id,
+      status: 'pendiente',
+      payment_method: 'efectivo',
+      subtotal: quote.subtotal,
+      discount: quote.discount,
+      tax: quote.tax,
+      total: quote.total,
+      folio: `VTA-${Date.now()}`,
+    }).select().single()
+
+    if (saleErr || !saleData) { toast.error('Error al crear venta'); setSaving(false); return }
+
+    await supabase.from('sale_items').insert(
+      items.map((i) => ({
+        sale_id: saleData.id,
+        product_id: i.product_id,
+        quantity: i.quantity,
+        unit_price: i.unit_price,
+        discount: i.discount,
+        subtotal: i.subtotal,
+      }))
+    )
+
+    toast.success('¡Cotización convertida a venta!')
+    fetchData()
+    setSaving(false)
+  }
+
   return (
     <div className="animate-fade-in">
       <div className="page-header">
@@ -131,9 +171,27 @@ export default function CotizacionesPage() {
           <h1 className="page-title">Cotizaciones</h1>
           <p className="text-xs text-text-tertiary mt-0.5">{quotes.length} registros</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary btn">
-          <Plus className="w-4 h-4" /> Nueva cotización
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const csv = ['Folio,Cliente,Total,Vigencia,Estado']
+              filtered.forEach((q) => {
+                csv.push(`${q.folio},"${(q.customer as unknown as { name: string })?.name ?? ''}",${q.total},${formatDate(q.valid_until)},${STATUS_LABELS[q.status]}`)
+              })
+              const blob = new Blob([csv.join('\n')], { type: 'text/csv' })
+              const a = document.createElement('a')
+              a.href = URL.createObjectURL(blob)
+              a.download = `cotizaciones-${new Date().toISOString().split('T')[0]}.csv`
+              a.click()
+            }}
+            className="btn-secondary btn btn-sm"
+          >
+            <Download className="w-3.5 h-3.5" /> Exportar
+          </button>
+          <button onClick={() => setShowModal(true)} className="btn-primary btn">
+            <Plus className="w-4 h-4" /> Nueva cotización
+          </button>
+        </div>
       </div>
 
       <div className="relative mb-4">
@@ -155,10 +213,15 @@ export default function CotizacionesPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="text-center py-12"><span className="inline-block w-5 h-5 border-2 border-border border-t-accent rounded-full animate-spin" /></td></tr>
+              <TableSkeleton rows={6} cols={6} />
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-12 text-text-tertiary text-sm">
-                <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />No hay cotizaciones
+              <tr><td colSpan={6}>
+                <EmptyState
+                  icon={<FileText className="w-6 h-6" />}
+                  title={search ? 'Sin resultados' : 'Sin cotizaciones aún'}
+                  description={search ? `No encontramos cotizaciones con "${search}"` : 'Crea cotizaciones profesionales y conviértelas en ventas fácilmente.'}
+                  action={!search ? { label: 'Nueva cotización', onClick: () => setShowModal(true) } : undefined}
+                />
               </td></tr>
             ) : (
               filtered.map((q) => (
@@ -169,17 +232,31 @@ export default function CotizacionesPage() {
                   <td className="text-text-secondary">{formatDate(q.valid_until)}</td>
                   <td><span className={cn('badge', STATUS_BADGE[q.status])}>{STATUS_LABELS[q.status]}</span></td>
                   <td>
-                    {q.status === 'borrador' && (
-                      <button onClick={() => handleUpdateStatus(q.id, 'enviada')} className="btn-ghost btn btn-sm text-accent">
-                        <Send className="w-3.5 h-3.5" /> Enviar
-                      </button>
-                    )}
-                    {q.status === 'enviada' && (
-                      <div className="flex gap-1">
-                        <button onClick={() => handleUpdateStatus(q.id, 'aceptada')} className="btn btn-sm bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Aceptar</button>
-                        <button onClick={() => handleUpdateStatus(q.id, 'rechazada')} className="btn-danger btn btn-sm">Rechazar</button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {q.status === 'borrador' && (
+                        <button onClick={() => handleUpdateStatus(q.id, 'enviada')} className="btn-ghost btn btn-sm text-accent">
+                          <Send className="w-3.5 h-3.5" /> Enviar
+                        </button>
+                      )}
+                      {q.status === 'enviada' && (
+                        <>
+                          <button onClick={() => handleUpdateStatus(q.id, 'aceptada')} className="btn btn-sm bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <CheckCheck className="w-3.5 h-3.5" /> Aceptar
+                          </button>
+                          <button onClick={() => handleUpdateStatus(q.id, 'rechazada')} className="btn-danger btn btn-sm">Rechazar</button>
+                        </>
+                      )}
+                      {q.status === 'aceptada' && (
+                        <button
+                          onClick={() => handleConvertToSale(q)}
+                          disabled={saving}
+                          className="btn btn-sm bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/25 transition-colors"
+                        >
+                          <ShoppingCart className="w-3.5 h-3.5" />
+                          Convertir a venta
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))

@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { Plus, Search, X, Phone, Mail, Building2, Factory } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
+import { EmptyState } from '@/components/ui/empty-state'
+import { CardSkeleton } from '@/components/ui/skeleton'
 import type { Supplier } from '@/types'
 
 export default function ProveedoresPage() {
@@ -77,14 +79,16 @@ export default function ProveedoresPage() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <span className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin" />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Factory className="w-10 h-10 text-text-tertiary mb-3 opacity-40" />
-          <p className="text-text-secondary text-sm">No hay proveedores registrados</p>
-        </div>
+        <EmptyState
+          icon={search ? <Search className="w-6 h-6" /> : <Factory className="w-6 h-6" />}
+          title={search ? 'Sin resultados' : 'Sin proveedores aún'}
+          description={search ? `No encontramos proveedores con "${search}"` : 'Agrega tus proveedores para gestionar compras y créditos de abastecimiento.'}
+          action={!search ? { label: 'Agregar proveedor', onClick: () => setShowModal(true) } : undefined}
+        />
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((supplier) => (

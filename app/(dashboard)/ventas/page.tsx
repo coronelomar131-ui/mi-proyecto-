@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
-import { Plus, Search, X, ChevronDown, ShoppingCart, Package } from 'lucide-react'
+import { Plus, Search, X, ShoppingCart, Package, ArrowUpDown, ArrowUp, ArrowDown, Download } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
+import { TableSkeleton } from '@/components/ui/skeleton'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import type { Sale, Customer, Product, SaleStatus } from '@/types'
@@ -38,6 +40,8 @@ export default function VentasPage() {
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState('')
   const [productSearch, setProductSearch] = useState('')
+  const [sortField, setSortField] = useState<'created_at' | 'total' | 'status'>('created_at')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'transferencia' | 'credito'>('efectivo')
@@ -58,11 +62,28 @@ export default function VentasPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const filteredSales = sales.filter(
-    (s) =>
-      s.folio?.toLowerCase().includes(search.toLowerCase()) ||
-      (s.customer as unknown as { name: string })?.name?.toLowerCase().includes(search.toLowerCase())
-  )
+  const toggleSort = (field: typeof sortField) => {
+    if (sortField === field) setSortDir((d) => d === 'asc' ? 'desc' : 'asc')
+    else { setSortField(field); setSortDir('desc') }
+  }
+
+  const SortIcon = ({ field }: { field: typeof sortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="w-3 h-3 text-text-tertiary" />
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-accent" /> : <ArrowDown className="w-3 h-3 text-accent" />
+  }
+
+  const filteredSales = sales
+    .filter(
+      (s) =>
+        s.folio?.toLowerCase().includes(search.toLowerCase()) ||
+        (s.customer as unknown as { name: string })?.name?.toLowerCase().includes(search.toLowerCase())
+    )
+    .sort((a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1
+      if (sortField === 'total') return (a.total - b.total) * dir
+      if (sortField === 'status') return a.status.localeCompare(b.status) * dir
+      return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * dir
+    })
 
   const filteredProducts = products.filter(
     (p) =>
@@ -144,11 +165,29 @@ export default function VentasPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Ventas</h1>
-          <p className="text-xs text-text-tertiary mt-0.5">{sales.length} registros totales</p>
+          <p className="text-xs text-text-tertiary mt-0.5">{sales.length} registros · {filteredSales.length} visibles</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary btn">
-          <Plus className="w-4 h-4" /> Nueva venta
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const csv = ['Folio,Cliente,Total,Pago,Estado,Fecha']
+              filteredSales.forEach((s) => {
+                csv.push(`${s.folio},"${(s.customer as unknown as { name: string })?.name ?? ''}",${s.total},${s.payment_method},${s.status},${formatDate(s.created_at)}`)
+              })
+              const blob = new Blob([csv.join('\n')], { type: 'text/csv' })
+              const a = document.createElement('a')
+              a.href = URL.createObjectURL(blob)
+              a.download = `ventas-${new Date().toISOString().split('T')[0]}.csv`
+              a.click()
+            }}
+            className="btn-secondary btn btn-sm"
+          >
+            <Download className="w-3.5 h-3.5" /> Exportar
+          </button>
+          <button onClick={() => setShowModal(true)} className="btn-primary btn">
+            <Plus className="w-4 h-4" /> Nueva venta
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -170,24 +209,36 @@ export default function VentasPage() {
             <tr>
               <th>Folio</th>
               <th>Cliente</th>
-              <th>Total</th>
+              <th>
+                <button onClick={() => toggleSort('total')} className="flex items-center gap-1 hover:text-text-primary transition-colors">
+                  Total <SortIcon field="total" />
+                </button>
+              </th>
               <th>Pago</th>
-              <th>Estado</th>
-              <th>Fecha</th>
+              <th>
+                <button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-text-primary transition-colors">
+                  Estado <SortIcon field="status" />
+                </button>
+              </th>
+              <th>
+                <button onClick={() => toggleSort('created_at')} className="flex items-center gap-1 hover:text-text-primary transition-colors">
+                  Fecha <SortIcon field="created_at" />
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={6} className="text-center py-12 text-text-tertiary">
-                  <span className="inline-block w-5 h-5 border-2 border-border border-t-accent rounded-full animate-spin" />
-                </td>
-              </tr>
+              <TableSkeleton rows={6} cols={6} />
             ) : filteredSales.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-center py-12 text-text-tertiary text-sm">
-                  <ShoppingCart className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  No hay ventas registradas
+                <td colSpan={6}>
+                  <EmptyState
+                    icon={<ShoppingCart className="w-6 h-6" />}
+                    title={search ? 'Sin resultados' : 'Aún no hay ventas'}
+                    description={search ? `No encontramos ventas con "${search}"` : 'Registra tu primera venta y empieza a gestionar tus pedidos.'}
+                    action={!search ? { label: 'Nueva venta', onClick: () => setShowModal(true) } : undefined}
+                  />
                 </td>
               </tr>
             ) : (

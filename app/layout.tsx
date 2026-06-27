@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Toaster } from 'react-hot-toast'
+import { KeyboardShortcutsModal } from '@/components/ui/keyboard-shortcuts'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es" className="dark">
       <body>
         {children}
+        <KeyboardShortcutsModal />
         <Toaster
           position="top-right"
           gutter={8}

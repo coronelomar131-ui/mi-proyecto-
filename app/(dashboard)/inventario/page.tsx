@@ -3,9 +3,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatNumber } from '@/lib/utils/format'
-import { Plus, Search, X, AlertTriangle, Package, TrendingUp } from 'lucide-react'
+import { Plus, Search, X, AlertTriangle, Package, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
+import { EmptyState } from '@/components/ui/empty-state'
+import { TableSkeleton } from '@/components/ui/skeleton'
 import type { Product } from '@/types'
 
 export default function InventarioPage() {
@@ -81,9 +83,28 @@ export default function InventarioPage() {
           <h1 className="page-title">Inventario</h1>
           <p className="text-xs text-text-tertiary mt-0.5">{products.length} productos</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary btn">
-          <Plus className="w-4 h-4" /> Nuevo producto
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const csv = ['SKU,Nombre,Unidad,Costo,Precio,Stock,Stock Mínimo,Estado']
+              products.forEach((p) => {
+                const status = p.stock === 0 ? 'Agotado' : p.stock <= p.min_stock ? 'Stock bajo' : 'En stock'
+                csv.push(`${p.sku},"${p.name}",${p.unit},${p.cost_price},${p.sale_price},${p.stock},${p.min_stock},${status}`)
+              })
+              const blob = new Blob([csv.join('\n')], { type: 'text/csv' })
+              const a = document.createElement('a')
+              a.href = URL.createObjectURL(blob)
+              a.download = `inventario-${new Date().toISOString().split('T')[0]}.csv`
+              a.click()
+            }}
+            className="btn-secondary btn btn-sm"
+          >
+            <Download className="w-3.5 h-3.5" /> Exportar
+          </button>
+          <button onClick={() => setShowModal(true)} className="btn-primary btn">
+            <Plus className="w-4 h-4" /> Nuevo producto
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -137,13 +158,15 @@ export default function InventarioPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="text-center py-12">
-                <span className="inline-block w-5 h-5 border-2 border-border border-t-accent rounded-full animate-spin" />
-              </td></tr>
+              <TableSkeleton rows={6} cols={8} />
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-12 text-text-tertiary text-sm">
-                <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                No hay productos
+              <tr><td colSpan={8}>
+                <EmptyState
+                  icon={<Package className="w-6 h-6" />}
+                  title={search || filterLow ? 'Sin resultados' : 'Sin productos aún'}
+                  description={search ? `No hay productos con "${search}"` : filterLow ? 'No hay productos con stock bajo. ¡Bien surtido!' : 'Agrega tu primer producto al catálogo para empezar a vender.'}
+                  action={!search && !filterLow ? { label: 'Agregar producto', onClick: () => setShowModal(true) } : undefined}
+                />
               </td></tr>
             ) : (
               filtered.map((p) => {

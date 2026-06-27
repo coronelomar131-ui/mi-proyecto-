@@ -3,9 +3,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
-import { Plus, X, TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { Plus, X, TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownRight, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
+import { EmptyState } from '@/components/ui/empty-state'
+import { TableSkeleton } from '@/components/ui/skeleton'
 import type { Transaction } from '@/types'
 
 const INCOME_CATEGORIES = ['Ventas', 'Cobro de deuda', 'Devolución de proveedor', 'Otro ingreso']
@@ -72,9 +74,27 @@ export default function FinanzasPage() {
           <h1 className="page-title">Finanzas</h1>
           <p className="text-xs text-text-tertiary mt-0.5">Control de ingresos y egresos</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary btn">
-          <Plus className="w-4 h-4" /> Nuevo movimiento
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const csv = ['Fecha,Tipo,Categoría,Descripción,Referencia,Monto']
+              filtered.forEach((t) => {
+                csv.push(`${formatDate(t.date)},${t.type},${t.category},"${t.description}",${t.reference ?? ''},${t.amount}`)
+              })
+              const blob = new Blob([csv.join('\n')], { type: 'text/csv' })
+              const a = document.createElement('a')
+              a.href = URL.createObjectURL(blob)
+              a.download = `finanzas-${new Date().toISOString().split('T')[0]}.csv`
+              a.click()
+            }}
+            className="btn-secondary btn btn-sm"
+          >
+            <Download className="w-3.5 h-3.5" /> Exportar
+          </button>
+          <button onClick={() => setShowModal(true)} className="btn-primary btn">
+            <Plus className="w-4 h-4" /> Nuevo movimiento
+          </button>
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -134,10 +154,15 @@ export default function FinanzasPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="text-center py-12"><span className="inline-block w-5 h-5 border-2 border-border border-t-accent rounded-full animate-spin" /></td></tr>
+              <TableSkeleton rows={8} cols={6} />
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-12 text-text-tertiary text-sm">
-                <DollarSign className="w-8 h-8 mx-auto mb-2 opacity-30" />No hay movimientos
+              <tr><td colSpan={6}>
+                <EmptyState
+                  icon={<DollarSign className="w-6 h-6" />}
+                  title={filterType === 'all' ? 'Sin movimientos aún' : filterType === 'ingreso' ? 'Sin ingresos registrados' : 'Sin egresos registrados'}
+                  description={filterType === 'all' ? 'Registra tus ingresos y egresos para llevar un control financiero claro.' : `No hay ${filterType === 'ingreso' ? 'ingresos' : 'egresos'} registrados en este período.`}
+                  action={filterType === 'all' ? { label: 'Registrar movimiento', onClick: () => setShowModal(true) } : undefined}
+                />
               </td></tr>
             ) : (
               filtered.map((t) => (

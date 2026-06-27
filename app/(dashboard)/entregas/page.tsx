@@ -6,6 +6,8 @@ import { formatDate } from '@/lib/utils/format'
 import { Truck, MapPin, Clock, CheckCircle, XCircle, Navigation } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
+import { EmptyState } from '@/components/ui/empty-state'
+import { CardSkeleton } from '@/components/ui/skeleton'
 import type { Delivery, DeliveryStatus } from '@/types'
 
 const STATUS_CONFIG: Record<DeliveryStatus, { label: string; badge: string; icon: React.ElementType }> = {
@@ -106,14 +108,15 @@ export default function EntregasPage() {
 
       {/* Cards */}
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <span className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin" />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Truck className="w-10 h-10 text-text-tertiary mb-3 opacity-40" />
-          <p className="text-text-secondary text-sm">No hay entregas en este estado</p>
-        </div>
+        <EmptyState
+          icon={<Truck className="w-6 h-6" />}
+          title={filterStatus === 'all' ? 'Sin entregas aún' : `Sin entregas ${STATUS_CONFIG[filterStatus]?.label?.toLowerCase()}`}
+          description={filterStatus === 'all' ? 'Las entregas aparecerán aquí cuando se creen ventas con envío.' : 'No hay entregas en este estado en este momento.'}
+        />
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((delivery) => {

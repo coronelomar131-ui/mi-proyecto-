@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, initials } from '@/lib/utils/format'
-import { Plus, Search, X, Phone, Mail, MapPin, CreditCard } from 'lucide-react'
+import { Plus, Search, X, Phone, Mail, MapPin, CreditCard, Users, TrendingUp, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { EmptyState } from '@/components/ui/empty-state'
 import type { Customer } from '@/types'
 
 export default function ClientesPage() {
@@ -83,6 +84,27 @@ export default function ClientesPage() {
         </button>
       </div>
 
+      {/* Summary */}
+      {customers.length > 0 && (
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          {[
+            { label: 'Total clientes', value: customers.length, icon: Users, color: 'text-accent', bg: 'bg-accent/10' },
+            { label: 'Con crédito', value: customers.filter(c => c.credit_limit > 0).length, icon: TrendingUp, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+            { label: 'Con saldo', value: customers.filter(c => c.balance > 0).length, icon: AlertCircle, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+          ].map((stat) => (
+            <div key={stat.label} className="card p-4 flex items-center gap-3">
+              <div className={`w-8 h-8 rounded-lg ${stat.bg} flex items-center justify-center shrink-0`}>
+                <stat.icon className={`w-4 h-4 ${stat.color}`} />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-text-primary">{stat.value}</p>
+                <p className="text-2xs text-text-tertiary">{stat.label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Search */}
       <div className="relative mb-6">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
@@ -101,13 +123,12 @@ export default function ClientesPage() {
           <span className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-12 h-12 rounded-xl bg-surface-2 flex items-center justify-center mb-3">
-            <Search className="w-5 h-5 text-text-tertiary" />
-          </div>
-          <p className="text-text-secondary text-sm">No se encontraron clientes</p>
-          <p className="text-text-tertiary text-xs mt-1">Intenta con otro término de búsqueda</p>
-        </div>
+        <EmptyState
+          icon={search ? <Search className="w-6 h-6" /> : <Users className="w-6 h-6" />}
+          title={search ? 'Sin resultados' : 'Aún no hay clientes'}
+          description={search ? `No encontramos clientes con "${search}"` : 'Agrega tu primer cliente para empezar a gestionar tus ventas y créditos.'}
+          action={!search ? { label: 'Agregar cliente', onClick: () => setShowModal(true) } : undefined}
+        />
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((customer, idx) => {
