@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { createClient } from '@/lib/supabase/client'
-import { formatCurrency, initials } from '@/lib/utils/format'
-import { Plus, Search, X, Phone, Mail, MapPin, CreditCard, Users, TrendingUp, AlertCircle } from 'lucide-react'
+import { formatCurrency, formatDate, initials } from '@/lib/utils/format'
+import { Plus, Search, X, Phone, Mail, MapPin, CreditCard, Users, TrendingUp, AlertCircle, Eye, ShoppingCart, Building2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { EmptyState } from '@/components/ui/empty-state'
-import type { Customer } from '@/types'
+import { cn } from '@/lib/utils/cn'
+import type { Customer, Sale } from '@/types'
 
 export default function ClientesPage() {
   const supabase = createClient()
@@ -16,6 +17,9 @@ export default function ClientesPage() {
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [viewCustomer, setViewCustomer] = useState<Customer | null>(null)
+  const [customerSales, setCustomerSales] = useState<Sale[]>([])
+  const [loadingSales, setLoadingSales] = useState(false)
   const [form, setForm] = useState({
     name: '', email: '', phone: '', address: '', city: '', rfc: '', credit_limit: '0',
   })
@@ -64,6 +68,19 @@ export default function ClientesPage() {
       fetchCustomers()
     }
     setSaving(false)
+  }
+
+  const openCustomerDetail = async (customer: Customer) => {
+    setViewCustomer(customer)
+    setLoadingSales(true)
+    const { data } = await supabase
+      .from('sales')
+      .select('id, folio, total, status, created_at, payment_method')
+      .eq('customer_id', customer.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+    setCustomerSales((data as Sale[]) ?? [])
+    setLoadingSales(false)
   }
 
   const colors = [
@@ -136,7 +153,7 @@ export default function ClientesPage() {
           {filtered.map((customer, idx) => {
             const colorClass = colors[idx % colors.length]
             return (
-              <div key={customer.id} className="card-hover p-5 group">
+              <div key={customer.id} className="card-hover p-5 group cursor-pointer" onClick={() => openCustomerDetail(customer)}>
                 <div className="flex items-start gap-3 mb-4">
                   <div className={`w-10 h-10 rounded-xl border flex items-center justify-center text-sm font-semibold shrink-0 ${colorClass}`}>
                     {initials(customer.name)}
@@ -243,6 +260,105 @@ export default function ClientesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Customer detail modal */}
+      {viewCustomer && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setViewCustomer(null)}>
+          <div className="modal w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-sm font-semibold text-accent">
+                  {initials(viewCustomer.name)}
+                </div>
+                <div>
+                  <h2 className="font-semibold text-text-primary">{viewCustomer.name}</h2>
+                  {viewCustomer.city && <p className="text-xs text-text-tertiary">{viewCustomer.city}</p>}
+                </div>
+              </div>
+              <button onClick={() => setViewCustomer(null)} className="btn-ghost btn p-1.5">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              {/* Contact info */}
+              <div>
+                <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-3">Contacto</p>
+                <div className="space-y-2 text-sm">
+                  {viewCustomer.email && (
+                    <div className="flex items-center gap-2 text-text-secondary">
+                      <Mail className="w-4 h-4 text-text-tertiary shrink-0" />
+                      <a href={`mailto:${viewCustomer.email}`} className="hover:text-accent transition-colors">{viewCustomer.email}</a>
+                    </div>
+                  )}
+                  {viewCustomer.phone && (
+                    <div className="flex items-center gap-2 text-text-secondary">
+                      <Phone className="w-4 h-4 text-text-tertiary shrink-0" />
+                      <a href={`tel:${viewCustomer.phone}`} className="hover:text-accent transition-colors">{viewCustomer.phone}</a>
+                    </div>
+                  )}
+                  {viewCustomer.address && (
+                    <div className="flex items-center gap-2 text-text-secondary">
+                      <MapPin className="w-4 h-4 text-text-tertiary shrink-0" />
+                      <span>{viewCustomer.address}{viewCustomer.city ? `, ${viewCustomer.city}` : ''}</span>
+                    </div>
+                  )}
+                  {viewCustomer.rfc && (
+                    <div className="flex items-center gap-2 text-text-secondary">
+                      <CreditCard className="w-4 h-4 text-text-tertiary shrink-0" />
+                      <span className="font-mono">{viewCustomer.rfc}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Credit / Balance */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-surface-2 rounded-xl p-4">
+                  <p className="text-xs text-text-tertiary mb-1">Límite de crédito</p>
+                  <p className="text-lg font-bold text-text-primary">{formatCurrency(viewCustomer.credit_limit)}</p>
+                </div>
+                <div className="bg-surface-2 rounded-xl p-4">
+                  <p className="text-xs text-text-tertiary mb-1">Saldo pendiente</p>
+                  <p className={cn('text-lg font-bold', viewCustomer.balance > 0 ? 'text-amber-400' : 'text-emerald-400')}>
+                    {formatCurrency(viewCustomer.balance)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Recent sales */}
+              <div>
+                <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-3">Últimas compras</p>
+                {loadingSales ? (
+                  <div className="flex items-center justify-center py-8">
+                    <span className="w-5 h-5 border-2 border-border border-t-accent rounded-full animate-spin" />
+                  </div>
+                ) : customerSales.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <ShoppingCart className="w-8 h-8 text-text-tertiary mb-2 opacity-30" />
+                    <p className="text-sm text-text-secondary">Sin compras registradas</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {customerSales.map((sale) => (
+                      <div key={sale.id} className="flex items-center justify-between bg-surface-2 rounded-lg px-3 py-2.5">
+                        <div>
+                          <p className="text-sm font-mono text-accent">{sale.folio}</p>
+                          <p className="text-xs text-text-tertiary">{formatDate(sale.created_at)} · {sale.payment_method}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-text-primary">{formatCurrency(sale.total)}</p>
+                          <p className="text-xs text-text-tertiary capitalize">{sale.status}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
