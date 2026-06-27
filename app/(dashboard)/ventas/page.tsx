@@ -46,6 +46,7 @@ export default function VentasPage() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'transferencia' | 'credito'>('efectivo')
   const [saving, setSaving] = useState(false)
+  const [filterStatus, setFilterStatus] = useState<SaleStatus | 'all'>('all')
   const [viewSale, setViewSale] = useState<Sale | null>(null)
   const [saleItems, setSaleItems] = useState<(SaleItem & { product: { name: string; sku: string } })[]>([])
   const [loadingItems, setLoadingItems] = useState(false)
@@ -78,8 +79,9 @@ export default function VentasPage() {
   const filteredSales = sales
     .filter(
       (s) =>
-        s.folio?.toLowerCase().includes(search.toLowerCase()) ||
-        (s.customer as unknown as { name: string })?.name?.toLowerCase().includes(search.toLowerCase())
+        (filterStatus === 'all' || s.status === filterStatus) &&
+        (s.folio?.toLowerCase().includes(search.toLowerCase()) ||
+        (s.customer as unknown as { name: string })?.name?.toLowerCase().includes(search.toLowerCase()))
     )
     .sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1
@@ -222,6 +224,30 @@ export default function VentasPage() {
           placeholder="Buscar por folio o cliente..."
           className="input pl-9"
         />
+      </div>
+
+      {/* Status filter tabs */}
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+        {(['all', 'pendiente', 'confirmada', 'entregada', 'cancelada'] as const).map((status) => {
+          const count = status === 'all' ? sales.length : sales.filter(s => s.status === status).length
+          return (
+            <button
+              key={status}
+              onClick={() => setFilterStatus(status)}
+              className={cn(
+                'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all shrink-0',
+                filterStatus === status
+                  ? 'bg-accent text-surface-0'
+                  : 'bg-surface-2 text-text-secondary hover:text-text-primary hover:bg-surface-3'
+              )}
+            >
+              {status === 'all' ? 'Todas' : STATUS_LABELS[status]}
+              <span className={cn('text-xs px-1.5 py-0.5 rounded-full', filterStatus === status ? 'bg-surface-0/20' : 'bg-surface-3')}>
+                {count}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Table */}

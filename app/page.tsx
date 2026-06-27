@@ -237,6 +237,20 @@ export default function LandingPage() {
           <p className="text-xs text-text-tertiary mt-4">
             Sin tarjeta de crédito · Cancelar en cualquier momento
           </p>
+
+          {/* Social proof mini-stats */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mt-10 pt-10 border-t border-border/40">
+            {[
+              { value: '150+', label: 'distribuidoras activas' },
+              { value: '$2M+', label: 'MXN procesados' },
+              { value: '4.9/5', label: 'satisfacción de usuarios' },
+            ].map((stat) => (
+              <div key={stat.label} className="text-center">
+                <p className="text-2xl font-bold text-text-primary">{stat.value}</p>
+                <p className="text-xs text-text-tertiary">{stat.label}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Hero visual */}
@@ -464,7 +478,7 @@ export default function LandingPage() {
               <span className="font-semibold text-sm">GestorPro</span>
             </div>
             <p className="text-text-tertiary text-xs">
-              © 2024 GestorPro. ERP para distribuidores.
+              © {new Date().getFullYear()} GestorPro. ERP para distribuidores mexicanos.
             </p>
             <div className="flex items-center gap-6 text-xs text-text-tertiary">
               <a href="#" className="hover:text-text-secondary transition-colors">Privacidad</a>

@@ -207,28 +207,48 @@ export default async function DashboardPage() {
 
       {/* Bottom section */}
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Recent activity placeholder */}
+        {/* Recent activity - real data */}
         <div className="card p-5">
-          <h3 className="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-accent" />
-            Actividad reciente
-          </h3>
-          <div className="space-y-3">
-            {[
-              { text: 'Venta #00042 confirmada', sub: 'Cliente: Comercial López', time: 'Hace 5 min' },
-              { text: 'Entrega #00038 completada', sub: 'Repartidor: Marco A.', time: 'Hace 12 min' },
-              { text: 'Stock bajo: Aceite 5W30', sub: 'Solo 3 unidades', time: 'Hace 20 min' },
-              { text: 'Nueva cotización enviada', sub: 'Distribuidora Morales', time: 'Hace 45 min' },
-            ].map((item, i) => (
-              <div key={i} className="flex items-start justify-between gap-3 py-2 border-b border-border/50 last:border-0">
-                <div>
-                  <p className="text-sm text-text-primary">{item.text}</p>
-                  <p className="text-xs text-text-tertiary mt-0.5">{item.sub}</p>
-                </div>
-                <span className="text-2xs text-text-tertiary shrink-0 mt-0.5">{item.time}</span>
-              </div>
-            ))}
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-accent" />
+              Ventas recientes
+            </h3>
+            <Link href="/dashboard/ventas" className="text-xs text-accent hover:text-accent-400 flex items-center gap-1">
+              Ver todas <ArrowRight className="w-3 h-3" />
+            </Link>
           </div>
+          {recentSales.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <ShoppingCart className="w-8 h-8 text-text-tertiary mb-2 opacity-30" />
+              <p className="text-sm text-text-secondary">Aún no hay ventas</p>
+              <Link href="/dashboard/ventas" className="text-xs text-accent mt-2">Crear primera venta</Link>
+            </div>
+          ) : (
+            <div className="space-y-0">
+              {recentSales.map((sale) => {
+                const customerName = (sale.customer as unknown as { name: string })?.name ?? '—'
+                const statusColor = {
+                  pendiente: 'text-amber-400',
+                  confirmada: 'text-accent',
+                  entregada: 'text-emerald-400',
+                  cancelada: 'text-text-tertiary',
+                }[sale.status as string] ?? 'text-text-tertiary'
+                return (
+                  <div key={sale.id} className="flex items-center justify-between gap-3 py-2.5 border-b border-border/50 last:border-0">
+                    <div className="min-w-0">
+                      <p className="text-sm text-text-primary font-mono truncate">{sale.folio}</p>
+                      <p className="text-xs text-text-tertiary mt-0.5">{customerName}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold text-text-primary">{formatCurrency(sale.total)}</p>
+                      <p className={`text-xs capitalize ${statusColor}`}>{sale.status}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Stock alerts */}
