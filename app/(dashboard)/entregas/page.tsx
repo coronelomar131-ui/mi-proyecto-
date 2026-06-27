@@ -1,0 +1,201 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { formatDate } from '@/lib/utils/format'
+import { Truck, MapPin, Clock, CheckCircle, XCircle, Navigation } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { cn } from '@/lib/utils/cn'
+import type { Delivery, DeliveryStatus } from '@/types'
+
+const STATUS_CONFIG: Record<DeliveryStatus, { label: string; badge: string; icon: React.ElementType }> = {
+  pendiente: { label: 'Pendiente', badge: 'badge-yellow', icon: Clock },
+  en_ruta: { label: 'En ruta', badge: 'badge-accent', icon: Navigation },
+  entregado: { label: 'Entregado', badge: 'badge-green', icon: CheckCircle },
+  fallido: { label: 'Fallido', badge: 'badge-red', icon: XCircle },
+}
+
+const STATUS_TRANSITIONS: Record<DeliveryStatus, DeliveryStatus | null> = {
+  pendiente: 'en_ruta',
+  en_ruta: 'entregado',
+  entregado: null,
+  fallido: null,
+}
+
+export default function EntregasPage() {
+  const supabase = createClient()
+  const [deliveries, setDeliveries] = useState<Delivery[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filterStatus, setFilterStatus] = useState<DeliveryStatus | 'all'>('all')
+
+  const fetchDeliveries = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('deliveries')
+      .select('*, sale:sales(folio, customer:customers(name))')
+      .order('created_at', { ascending: false })
+      .limit(100)
+    setDeliveries((data as Delivery[]) ?? [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchDeliveries() }, [fetchDeliveries])
+
+  const filtered = deliveries.filter((d) => filterStatus === 'all' || d.status === filterStatus)
+
+  const counts = {
+    all: deliveries.length,
+    pendiente: deliveries.filter((d) => d.status === 'pendiente').length,
+    en_ruta: deliveries.filter((d) => d.status === 'en_ruta').length,
+    entregado: deliveries.filter((d) => d.status === 'entregado').length,
+    fallido: deliveries.filter((d) => d.status === 'fallido').length,
+  }
+
+  const handleAdvanceStatus = async (delivery: Delivery) => {
+    const next = STATUS_TRANSITIONS[delivery.status]
+    if (!next) return
+
+    const update: Record<string, unknown> = { status: next }
+    if (next === 'entregado') update.delivered_at = new Date().toISOString()
+
+    const { error } = await supabase.from('deliveries').update(update).eq('id', delivery.id)
+    if (error) { toast.error('Error al actualizar'); return }
+    toast.success(`Entrega marcada como: ${STATUS_CONFIG[next].label}`)
+    fetchDeliveries()
+  }
+
+  const handleMarkFailed = async (id: string) => {
+    const { error } = await supabase.from('deliveries').update({ status: 'fallido' }).eq('id', id)
+    if (error) { toast.error('Error'); return }
+    toast.error('Entrega marcada como fallida')
+    fetchDeliveries()
+  }
+
+  return (
+    <div className="animate-fade-in">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Entregas</h1>
+          <p className="text-xs text-text-tertiary mt-0.5">{deliveries.length} registros</p>
+        </div>
+      </div>
+
+      {/* Status filter tabs */}
+      <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1">
+        {(['all', 'pendiente', 'en_ruta', 'entregado', 'fallido'] as const).map((status) => (
+          <button
+            key={status}
+            onClick={() => setFilterStatus(status)}
+            className={cn(
+              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
+              filterStatus === status
+                ? 'bg-accent text-surface-0'
+                : 'bg-surface-2 text-text-secondary hover:text-text-primary hover:bg-surface-3'
+            )}
+          >
+            {status === 'all' ? 'Todas' : STATUS_CONFIG[status].label}
+            <span className={cn(
+              'text-xs px-1.5 py-0.5 rounded-full',
+              filterStatus === status ? 'bg-surface-0/20' : 'bg-surface-3'
+            )}>
+              {counts[status]}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Cards */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <span className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Truck className="w-10 h-10 text-text-tertiary mb-3 opacity-40" />
+          <p className="text-text-secondary text-sm">No hay entregas en este estado</p>
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((delivery) => {
+            const config = STATUS_CONFIG[delivery.status]
+            const StatusIcon = config.icon
+            const nextStatus = STATUS_TRANSITIONS[delivery.status]
+            const saleInfo = delivery.sale as unknown as { folio: string; customer?: { name: string } }
+
+            return (
+              <div key={delivery.id} className="card-hover p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className={cn(
+                      'w-8 h-8 rounded-lg flex items-center justify-center',
+                      delivery.status === 'en_ruta' ? 'bg-accent/20' :
+                      delivery.status === 'entregado' ? 'bg-emerald-500/20' :
+                      delivery.status === 'fallido' ? 'bg-red-500/20' : 'bg-amber-500/20'
+                    )}>
+                      <StatusIcon className={cn(
+                        'w-4 h-4',
+                        delivery.status === 'en_ruta' ? 'text-accent' :
+                        delivery.status === 'entregado' ? 'text-emerald-400' :
+                        delivery.status === 'fallido' ? 'text-red-400' : 'text-amber-400'
+                      )} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-text-primary">
+                        {saleInfo?.folio ?? 'Entrega sin folio'}
+                      </p>
+                      <p className="text-xs text-text-tertiary">{saleInfo?.customer?.name ?? '—'}</p>
+                    </div>
+                  </div>
+                  <span className={cn('badge', config.badge)}>{config.label}</span>
+                </div>
+
+                {delivery.address && (
+                  <div className="flex items-start gap-2 text-xs text-text-tertiary mb-3">
+                    <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span className="line-clamp-2">{delivery.address}</span>
+                  </div>
+                )}
+
+                {delivery.scheduled_date && (
+                  <div className="flex items-center gap-2 text-xs text-text-tertiary mb-4">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Programada: {formatDate(delivery.scheduled_date)}</span>
+                  </div>
+                )}
+
+                {delivery.delivered_at && (
+                  <div className="flex items-center gap-2 text-xs text-emerald-400 mb-4">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>Entregada: {formatDate(delivery.delivered_at)}</span>
+                  </div>
+                )}
+
+                {(nextStatus || delivery.status === 'en_ruta') && (
+                  <div className="flex gap-2">
+                    {nextStatus && (
+                      <button
+                        onClick={() => handleAdvanceStatus(delivery)}
+                        className={cn(
+                          'btn btn-sm flex-1',
+                          nextStatus === 'en_ruta' ? 'btn-secondary' : 'btn-primary'
+                        )}
+                      >
+                        <StatusIcon className="w-3.5 h-3.5" />
+                        {nextStatus === 'en_ruta' ? 'Iniciar entrega' : 'Marcar entregada'}
+                      </button>
+                    )}
+                    {delivery.status === 'en_ruta' && (
+                      <button onClick={() => handleMarkFailed(delivery.id)} className="btn-danger btn btn-sm px-3">
+                        <XCircle className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
