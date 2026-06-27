@@ -48,6 +48,7 @@ export default function VentasPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'transferencia' | 'credito'>('efectivo')
+  const [saleNotes, setSaleNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [filterStatus, setFilterStatus] = useState<SaleStatus | 'all'>('all')
   const [viewSale, setViewSale] = useState<Sale | null>(null)
@@ -144,6 +145,7 @@ export default function VentasPage() {
       tax,
       total,
       folio,
+      notes: saleNotes.trim() || null,
     }).select().single()
 
     if (error) {
@@ -169,6 +171,7 @@ export default function VentasPage() {
     setShowModal(false)
     setCart([])
     setSelectedCustomer(null)
+    setSaleNotes('')
     fetchData()
     setSaving(false)
   }
@@ -437,6 +440,18 @@ export default function VentasPage() {
                   <option value="credito">Crédito</option>
                 </select>
               </div>
+
+              {/* Notas */}
+              <div>
+                <label className="label">Notas (opcional)</label>
+                <textarea
+                  value={saleNotes}
+                  onChange={(e) => setSaleNotes(e.target.value)}
+                  className="input resize-none"
+                  rows={2}
+                  placeholder="Instrucciones de entrega, observaciones..."
+                />
+              </div>
             </div>
 
             {/* Footer */}
@@ -524,6 +539,14 @@ export default function VentasPage() {
                   </div>
                 )}
               </div>
+
+              {/* Notes */}
+              {viewSale.notes && (
+                <div className="bg-surface-2 rounded-xl p-4">
+                  <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-1.5">Notas</p>
+                  <p className="text-sm text-text-secondary">{viewSale.notes}</p>
+                </div>
+              )}
 
               {/* Totals */}
               <div className="border-t border-border pt-4 space-y-2">

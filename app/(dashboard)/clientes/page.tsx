@@ -32,6 +32,8 @@ export default function ClientesPage() {
   const [showImport, setShowImport] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importPreview, setImportPreview] = useState<{ name: string; email: string; phone: string; city: string; rfc: string }[]>([])
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [registeringPayment, setRegisteringPayment] = useState(false)
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
@@ -187,6 +189,33 @@ export default function ClientesPage() {
     setLoadingSales(false)
   }
 
+  const handleRegisterPayment = async () => {
+    if (!viewCustomer) return
+    const amount = parseFloat(paymentAmount)
+    if (!amount || amount <= 0) { toast.error('Monto inválido'); return }
+    if (amount > viewCustomer.balance) { toast.error('El pago excede el saldo pendiente'); return }
+    setRegisteringPayment(true)
+    const newBalance = viewCustomer.balance - amount
+    const { error } = await supabase.from('customers').update({ balance: newBalance }).eq('id', viewCustomer.id)
+    if (error) {
+      toast.error('Error al registrar pago')
+    } else {
+      await supabase.from('transactions').insert({
+        type: 'ingreso',
+        category: 'Cobro de deuda',
+        description: `Pago de ${viewCustomer.name}`,
+        amount,
+        date: new Date().toISOString().split('T')[0],
+        reference: viewCustomer.name,
+      })
+      toast.success('Pago registrado')
+      setViewCustomer(prev => prev ? { ...prev, balance: newBalance } : null)
+      setPaymentAmount('')
+      fetchCustomers()
+    }
+    setRegisteringPayment(false)
+  }
+
   const colors = [
     'bg-accent/20 text-accent border-accent/30',
     'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -306,26 +335,36 @@ export default function ClientesPage() {
 
                 <div className="divider" />
 
-                <div className="flex items-center justify-between text-xs">
-                  <div>
-                    <p className="text-text-tertiary">Crédito</p>
-                    <p className="font-semibold text-text-primary">{formatCurrency(customer.credit_limit)}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); openEdit(customer) }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-surface-3 text-text-tertiary hover:text-text-primary"
-                      title="Editar cliente"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <div className="text-right">
-                      <p className="text-text-tertiary">Saldo</p>
-                      <p className={`font-semibold ${customer.balance > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <div>
+                      <p className="text-text-tertiary">Crédito</p>
+                      <p className="font-semibold text-text-primary">{formatCurrency(customer.credit_limit)}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openEdit(customer) }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-surface-3 text-text-tertiary hover:text-text-primary"
+                        title="Editar cliente"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <div className="text-right">
+                        <p className="text-text-tertiary">Saldo</p>
+                        <p className={`font-semibold ${customer.balance > 0 ? (customer.balance > customer.credit_limit && customer.credit_limit > 0 ? 'text-red-400' : 'text-amber-400') : 'text-emerald-400'}`}>
                           {formatCurrency(customer.balance)}
-                      </p>
+                        </p>
+                      </div>
                     </div>
                   </div>
+                  {customer.credit_limit > 0 && (
+                    <div className="h-1.5 bg-surface-3 rounded-full overflow-hidden">
+                      <div
+                        className={cn('h-full rounded-full transition-all', customer.balance > customer.credit_limit ? 'bg-red-400' : customer.balance / customer.credit_limit > 0.8 ? 'bg-amber-400' : 'bg-accent')}
+                        style={{ width: `${Math.min(100, (customer.balance / customer.credit_limit) * 100).toFixed(0)}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             )
@@ -552,17 +591,59 @@ export default function ClientesPage() {
               </div>
 
               {/* Credit / Balance */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-surface-2 rounded-xl p-4">
-                  <p className="text-xs text-text-tertiary mb-1">Límite de crédito</p>
-                  <p className="text-lg font-bold text-text-primary">{formatCurrency(viewCustomer.credit_limit)}</p>
+              <div className="bg-surface-2 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider">Crédito</p>
+                  {viewCustomer.balance > viewCustomer.credit_limit && viewCustomer.credit_limit > 0 && (
+                    <span className="badge badge-red flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Límite excedido</span>
+                  )}
                 </div>
-                <div className="bg-surface-2 rounded-xl p-4">
-                  <p className="text-xs text-text-tertiary mb-1">Saldo pendiente</p>
-                  <p className={cn('text-lg font-bold', viewCustomer.balance > 0 ? 'text-amber-400' : 'text-emerald-400')}>
-                    {formatCurrency(viewCustomer.balance)}
-                  </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-text-tertiary">Límite</p>
+                    <p className="text-base font-bold text-text-primary">{formatCurrency(viewCustomer.credit_limit)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-text-tertiary">Saldo pendiente</p>
+                    <p className={cn('text-base font-bold', viewCustomer.balance > 0 ? 'text-amber-400' : 'text-emerald-400')}>
+                      {formatCurrency(viewCustomer.balance)}
+                    </p>
+                  </div>
                 </div>
+                {viewCustomer.credit_limit > 0 && (
+                  <div>
+                    <div className="h-2 bg-surface-3 rounded-full overflow-hidden">
+                      <div
+                        className={cn('h-full rounded-full transition-all', viewCustomer.balance > viewCustomer.credit_limit ? 'bg-red-400' : viewCustomer.balance / viewCustomer.credit_limit > 0.8 ? 'bg-amber-400' : 'bg-accent')}
+                        style={{ width: `${Math.min(100, (viewCustomer.balance / viewCustomer.credit_limit) * 100).toFixed(1)}%` }}
+                      />
+                    </div>
+                    <p className="text-2xs text-text-tertiary mt-1">
+                      {((viewCustomer.balance / viewCustomer.credit_limit) * 100).toFixed(1)}% utilizado
+                    </p>
+                  </div>
+                )}
+                {viewCustomer.balance > 0 && (
+                  <div className="flex gap-2 pt-1">
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      max={viewCustomer.balance}
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      className="input flex-1 h-8 text-sm"
+                      placeholder="Monto a pagar..."
+                    />
+                    <button
+                      onClick={handleRegisterPayment}
+                      disabled={registeringPayment || !paymentAmount}
+                      className="btn-primary btn btn-sm"
+                    >
+                      {registeringPayment ? '...' : 'Registrar pago'}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Recent sales */}
