@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
-import { Plus, X, TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownRight, Download } from 'lucide-react'
+import { Plus, X, TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownRight, Download, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -29,6 +29,12 @@ export default function FinanzasPage() {
     date: new Date().toISOString().split('T')[0],
     reference: '',
   })
+
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase.from('transactions').delete().eq('id', id)
+    if (error) toast.error('Error al eliminar')
+    else { toast.success('Movimiento eliminado'); fetchTransactions() }
+  }
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
@@ -157,13 +163,14 @@ export default function FinanzasPage() {
               <th>Descripción</th>
               <th>Referencia</th>
               <th>Monto</th>
+              <th className="w-8"></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <TableSkeleton rows={8} cols={6} />
+              <TableSkeleton rows={8} cols={7} />
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={6}>
+              <tr><td colSpan={7}>
                 <EmptyState
                   icon={<DollarSign className="w-6 h-6" />}
                   title={filterType === 'all' ? 'Sin movimientos aún' : filterType === 'ingreso' ? 'Sin ingresos registrados' : 'Sin egresos registrados'}
@@ -186,6 +193,14 @@ export default function FinanzasPage() {
                   <td className="font-mono text-xs text-text-tertiary">{t.reference ?? '—'}</td>
                   <td className={cn('font-semibold', t.type === 'ingreso' ? 'text-emerald-400' : 'text-red-400')}>
                     {t.type === 'egreso' ? '-' : '+'}{formatCurrency(t.amount)}
+                  </td>
+                  <td>
+                    <button
+                      onClick={() => { if (confirm('¿Eliminar este movimiento?')) handleDelete(t.id) }}
+                      className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-tertiary hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </td>
                 </tr>
               ))

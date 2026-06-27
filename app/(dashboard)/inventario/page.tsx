@@ -5,7 +5,8 @@ import { useSearchParams } from 'next/navigation'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatNumber } from '@/lib/utils/format'
-import { Plus, Search, X, AlertTriangle, Package, Download, Edit2, TrendingUp, TrendingDown, Upload, FileSpreadsheet, Percent } from 'lucide-react'
+import { Plus, Search, X, AlertTriangle, Package, Download, Edit2, TrendingUp, TrendingDown, Upload, FileSpreadsheet, Percent, ShoppingBag } from 'lucide-react'
+import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -272,14 +273,34 @@ export default function InventarioPage() {
 
       {/* Stats */}
       {lowStockCount > 0 && (
-        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-5 flex items-center gap-3">
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-5 flex items-center gap-3 flex-wrap">
           <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
           <p className="text-sm text-amber-300">
             <strong>{lowStockCount} productos</strong> con stock bajo o agotado. Revisa y repone.
           </p>
-          <button onClick={() => setFilterLow(true)} className="ml-auto text-xs text-amber-400 hover:text-amber-300 underline">
-            Ver solo estos
-          </button>
+          <div className="ml-auto flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => {
+                const low = products.filter((p) => p.stock <= p.min_stock)
+                const csv = ['SKU,Nombre,Stock actual,Stock mínimo,Cantidad sugerida a pedir']
+                low.forEach((p) => {
+                  const suggested = Math.max(p.min_stock * 2 - p.stock, p.min_stock)
+                  csv.push(`${p.sku},"${p.name}",${p.stock},${p.min_stock},${suggested}`)
+                })
+                const blob = new Blob([csv.join('\n')], { type: 'text/csv' })
+                const a = document.createElement('a')
+                a.href = URL.createObjectURL(blob)
+                a.download = `reabastecimiento-${new Date().toISOString().split('T')[0]}.csv`
+                a.click()
+              }}
+              className="text-xs bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" /> Exportar lista de reabasto
+            </button>
+            <button onClick={() => setFilterLow(true)} className="text-xs text-amber-400 hover:text-amber-300 underline">
+              Ver solo estos
+            </button>
+          </div>
         </div>
       )}
 
@@ -389,6 +410,16 @@ export default function InventarioPage() {
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
+                        {p.stock <= p.min_stock && (
+                          <Link
+                            href="/dashboard/proveedores"
+                            onClick={(e) => e.stopPropagation()}
+                            className="btn-ghost btn p-1.5 text-amber-400 hover:text-amber-300"
+                            title="Crear orden de compra"
+                          >
+                            <ShoppingBag className="w-3.5 h-3.5" />
+                          </Link>
+                        )}
                       </div>
                     </td>
                   </tr>
