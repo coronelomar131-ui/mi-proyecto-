@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
-import { Plus, Search, X, ShoppingCart, Package, ArrowUpDown, ArrowUp, ArrowDown, Download, Eye, ChevronRight } from 'lucide-react'
+import { Plus, Search, X, ShoppingCart, Package, ArrowUpDown, ArrowUp, ArrowDown, Download, Eye, ChevronRight, Printer } from 'lucide-react'
+import Link from 'next/link'
 import { EmptyState } from '@/components/ui/empty-state'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import toast from 'react-hot-toast'
@@ -451,6 +452,14 @@ export default function VentasPage() {
               </div>
               <div className="flex items-center gap-2">
                 <span className={cn('badge', STATUS_BADGE[viewSale.status])}>{STATUS_LABELS[viewSale.status]}</span>
+                <Link
+                  href={`/dashboard/ventas/${viewSale.id}/print`}
+                  target="_blank"
+                  className="btn-ghost btn p-1.5 text-text-tertiary hover:text-text-primary"
+                  title="Imprimir / PDF"
+                >
+                  <Printer className="w-4 h-4" />
+                </Link>
                 <button onClick={() => setViewSale(null)} className="btn-ghost btn p-1.5"><X className="w-4 h-4" /></button>
               </div>
             </div>

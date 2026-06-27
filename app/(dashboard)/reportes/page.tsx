@@ -2,16 +2,23 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { formatCurrency, formatShortDate } from '@/lib/utils/format'
+import { formatCurrency, formatShortDate, formatNumber } from '@/lib/utils/format'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
-import { BarChart3, TrendingUp, Package, Users } from 'lucide-react'
+import { BarChart3, TrendingUp, Package, Users, ShoppingCart, DollarSign, RefreshCw } from 'lucide-react'
 import { subDays } from 'date-fns'
+import { cn } from '@/lib/utils/cn'
 
 const ACCENT = '#00C4D4'
 const COLORS = ['#00C4D4', '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+
+const RANGES = [
+  { label: '7 días', days: 7 },
+  { label: '30 días', days: 30 },
+  { label: '90 días', days: 90 },
+]
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number; name: string }[]; label?: string }) => {
   if (!active || !payload?.length) return null
@@ -29,29 +36,39 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 
 export default function ReportesPage() {
   const supabase = createClient()
+  const [rangeDays, setRangeDays] = useState(30)
   const [salesData, setSalesData] = useState<{ name: string; ventas: number; pedidos: number }[]>([])
   const [topProducts, setTopProducts] = useState<{ name: string; value: number }[]>([])
   const [customerSegments, setCustomerSegments] = useState<{ name: string; value: number }[]>([])
+  const [summary, setSummary] = useState({ totalRevenue: 0, totalOrders: 0, avgOrder: 0, uniqueCustomers: 0 })
   const [loading, setLoading] = useState(true)
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (days: number) => {
     setLoading(true)
-    const last30Days = subDays(new Date(), 30).toISOString()
+    const since = subDays(new Date(), days).toISOString()
 
     const [{ data: salesRaw }, { data: itemsRaw }, { data: customersRaw }] = await Promise.all([
-      supabase.from('sales').select('total, created_at, status').gte('created_at', last30Days).neq('status', 'cancelada'),
-      supabase.from('sale_items').select('quantity, subtotal, product:products(name)').limit(500),
+      supabase.from('sales').select('id, total, created_at, status, customer_id').gte('created_at', since).neq('status', 'cancelada'),
+      supabase.from('sale_items').select('quantity, subtotal, product:products(name)').limit(1000),
       supabase.from('customers').select('city, is_active').eq('is_active', true),
     ])
 
-    // Daily sales chart
+    // Summary KPIs
+    const validSales = salesRaw ?? []
+    const totalRevenue = validSales.reduce((s, r) => s + (r.total ?? 0), 0)
+    const totalOrders = validSales.length
+    const uniqueCustomers = new Set(validSales.map((s) => s.customer_id)).size
+    setSummary({ totalRevenue, totalOrders, avgOrder: totalOrders > 0 ? totalRevenue / totalOrders : 0, uniqueCustomers })
+
+    // Daily sales chart — show last N days up to 30 buckets
+    const buckets = Math.min(days, 30)
     const dayMap: Record<string, { ventas: number; pedidos: number }> = {}
-    for (let i = 6; i >= 0; i--) {
+    for (let i = buckets - 1; i >= 0; i--) {
       const d = subDays(new Date(), i)
       const key = formatShortDate(d)
       dayMap[key] = { ventas: 0, pedidos: 0 }
     }
-    salesRaw?.forEach((s) => {
+    validSales.forEach((s) => {
       const key = formatShortDate(s.created_at)
       if (dayMap[key]) {
         dayMap[key].ventas += s.total ?? 0
@@ -81,24 +98,49 @@ export default function ReportesPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <span className="w-8 h-8 border-2 border-border border-t-accent rounded-full animate-spin" />
-      </div>
-    )
-  }
+  useEffect(() => { fetchData(rangeDays) }, [fetchData, rangeDays])
 
   return (
     <div className="animate-fade-in">
       <div className="page-header">
         <div>
           <h1 className="page-title">Reportes</h1>
-          <p className="text-xs text-text-tertiary mt-0.5">Últimos 30 días</p>
+          <p className="text-xs text-text-tertiary mt-0.5">Análisis de rendimiento</p>
         </div>
-        <button onClick={fetchData} className="btn-secondary btn btn-sm">Actualizar</button>
+        <div className="flex items-center gap-2">
+          <div className="flex bg-surface-2 border border-border rounded-lg p-0.5 gap-0.5">
+            {RANGES.map((r) => (
+              <button
+                key={r.days}
+                onClick={() => setRangeDays(r.days)}
+                className={cn('text-xs px-3 py-1.5 rounded-md transition-all', rangeDays === r.days ? 'bg-accent text-surface-0 font-medium' : 'text-text-secondary hover:text-text-primary')}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => fetchData(rangeDays)} className="btn-secondary btn btn-sm" disabled={loading}>
+            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+          </button>
+        </div>
+      </div>
+
+      {/* Summary KPI row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {[
+          { label: 'Ingresos totales', value: loading ? '—' : formatCurrency(summary.totalRevenue), icon: DollarSign, color: 'text-accent', bg: 'bg-accent/10' },
+          { label: 'Pedidos', value: loading ? '—' : formatNumber(summary.totalOrders), icon: ShoppingCart, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+          { label: 'Ticket promedio', value: loading ? '—' : formatCurrency(summary.avgOrder), icon: TrendingUp, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+          { label: 'Clientes únicos', value: loading ? '—' : formatNumber(summary.uniqueCustomers), icon: Users, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+        ].map((k) => (
+          <div key={k.label} className="card p-4">
+            <div className={`w-8 h-8 rounded-lg ${k.bg} flex items-center justify-center mb-3`}>
+              <k.icon className={`w-4 h-4 ${k.color}`} />
+            </div>
+            <p className="text-xl font-bold text-text-primary">{k.value}</p>
+            <p className="text-xs text-text-tertiary mt-0.5">{k.label}</p>
+          </div>
+        ))}
       </div>
 
       <div className="space-y-6">
@@ -106,7 +148,7 @@ export default function ReportesPage() {
         <div className="card p-5">
           <div className="flex items-center gap-2 mb-5">
             <TrendingUp className="w-4 h-4 text-accent" />
-            <h3 className="text-sm font-semibold text-text-primary">Ventas últimos 7 días</h3>
+            <h3 className="text-sm font-semibold text-text-primary">Ventas — últimos {rangeDays} días</h3>
           </div>
           <ResponsiveContainer width="100%" height={240}>
             <AreaChart data={salesData}>
@@ -179,7 +221,7 @@ export default function ReportesPage() {
         <div className="card p-5">
           <div className="flex items-center gap-2 mb-5">
             <BarChart3 className="w-4 h-4 text-accent" />
-            <h3 className="text-sm font-semibold text-text-primary">Pedidos por día (últimos 7 días)</h3>
+            <h3 className="text-sm font-semibold text-text-primary">Pedidos por día — últimos {rangeDays} días</h3>
           </div>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={salesData}>

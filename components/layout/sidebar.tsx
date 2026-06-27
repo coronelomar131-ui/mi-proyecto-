@@ -75,7 +75,7 @@ export function Sidebar({ profile }: SidebarProps) {
           <div>
             <p className="text-sm font-semibold text-text-primary leading-none">GestorPro</p>
             <p className="text-2xs text-text-tertiary mt-0.5 truncate max-w-[120px]">
-              {profile?.organization_id ? 'Mi empresa' : 'Demo'}
+              {profile?.organizations?.name ?? (profile?.organization_id ? 'Mi empresa' : 'Demo')}
             </p>
           </div>
         </Link>

@@ -19,6 +19,7 @@ export interface Profile {
   is_active: boolean
   created_at: string
   updated_at: string
+  organizations?: { name: string; plan: string }
 }
 
 export interface Customer {

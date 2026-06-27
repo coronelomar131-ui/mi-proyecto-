@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate, initials } from '@/lib/utils/format'
-import { UserPlus, X, Shield, ShoppingCart, Package, Crown } from 'lucide-react'
+import { UserPlus, X, Shield, ShoppingCart, Package, Crown, Users } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
+import { TableSkeleton } from '@/components/ui/skeleton'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import type { Profile, UserRole } from '@/types'
@@ -83,25 +85,32 @@ export default function UsuariosPage() {
         ))}
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <span className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin" />
-        </div>
-      ) : (
-        <div className="table-container">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Usuario</th>
-                <th>Email</th>
-                <th>Rol</th>
-                <th>Estado</th>
-                <th>Miembro desde</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => {
+      <div className="table-container">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Email</th>
+              <th>Rol</th>
+              <th>Estado</th>
+              <th>Miembro desde</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <TableSkeleton rows={4} cols={6} />
+            ) : users.length === 0 ? (
+              <tr><td colSpan={6}>
+                <EmptyState
+                  icon={<Users className="w-6 h-6" />}
+                  title="Sin usuarios aún"
+                  description="Invita a tu equipo para que puedan usar GestorPro."
+                  action={{ label: 'Invitar usuario', onClick: () => setShowModal(true) }}
+                />
+              </td></tr>
+            ) : (
+              users.map((user) => {
                 const roleConfig = ROLE_CONFIG[user.role]
                 return (
                   <tr key={user.id}>
@@ -141,11 +150,11 @@ export default function UsuariosPage() {
                     </td>
                   </tr>
                 )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {showModal && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
