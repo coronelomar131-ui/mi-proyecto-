@@ -2,16 +2,15 @@ import { createClient } from '@/lib/supabase/server'
 import { formatCurrency, formatNumber } from '@/lib/utils/format'
 import {
   TrendingUp,
-  TrendingDown,
   ShoppingCart,
   Users,
   Package,
   Truck,
-  DollarSign,
   FileText,
   AlertTriangle,
 } from 'lucide-react'
 import Link from 'next/link'
+import { OnboardingChecklist } from '@/components/ui/onboarding-checklist'
 
 async function getKPIs(orgId: string) {
   const supabase = createClient()
@@ -152,6 +151,8 @@ export default async function DashboardPage() {
           {new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
       </div>
+
+      <OnboardingChecklist />
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">

@@ -9,9 +9,11 @@ import {
   Zap,
   Globe,
   Check,
+  X,
   ArrowRight,
   TrendingUp,
   Star,
+  Minus,
 } from 'lucide-react'
 
 const features = [
@@ -56,6 +58,44 @@ const features = [
     description: 'Web-first, responsive. Funciona en tablet, móvil y escritorio.',
   },
 ]
+
+const comparison = {
+  features: [
+    'Diseño moderno y oscuro',
+    'Funciona en móvil',
+    'Sin instalación (SaaS)',
+    'Listo en 5 minutos',
+    'Precio en MXN accesible',
+    'Ventas + Inventario + CRM',
+    'Control de entregas',
+    'Reportes con gráficas',
+    'Multi-usuario con roles',
+    'Búsqueda global (Cmd+K)',
+    'Soporte en español',
+  ],
+  competitors: [
+    {
+      name: 'GestorPro',
+      highlight: true,
+      values: [true, true, true, true, true, true, true, true, true, true, true],
+    },
+    {
+      name: 'Aspel SAE',
+      highlight: false,
+      values: [false, false, false, false, false, true, false, false, true, false, true],
+    },
+    {
+      name: 'Microsip',
+      highlight: false,
+      values: [false, false, false, false, true, true, false, false, false, false, true],
+    },
+    {
+      name: 'Bind ERP',
+      highlight: false,
+      values: [null, null, true, null, false, true, false, true, true, false, true],
+    },
+  ],
+}
 
 const plans = [
   {
@@ -254,6 +294,60 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Comparison table */}
+      <section className="py-20 px-4 bg-surface-1/30">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-accent/30 bg-accent/10 text-accent text-xs font-medium mb-4">
+              <Zap className="w-3 h-3" /> ¿Por qué GestorPro?
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-bold mb-4">
+              No somos uno más — somos lo que faltaba
+            </h2>
+            <p className="text-text-secondary max-w-xl mx-auto">
+              Aspel y Microsip llevan 20 años sin actualizarse. Nosotros empezamos por donde ellos dejaron de mejorar.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <th className="text-left px-4 py-3 text-text-tertiary font-medium text-xs w-1/3">Característica</th>
+                  {comparison.competitors.map((c) => (
+                    <th key={c.name} className={`px-4 py-3 text-center font-semibold text-sm ${c.highlight ? 'text-accent' : 'text-text-secondary'}`}>
+                      {c.highlight && <div className="w-1.5 h-1.5 bg-accent rounded-full mx-auto mb-1" />}
+                      {c.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {comparison.features.map((feat, fi) => (
+                  <tr key={feat} className="border-t border-border/40 hover:bg-surface-2/20 transition-colors">
+                    <td className="px-4 py-3 text-text-secondary">{feat}</td>
+                    {comparison.competitors.map((c) => {
+                      const val = c.values[fi]
+                      return (
+                        <td key={c.name} className="px-4 py-3 text-center">
+                          {val === true
+                            ? <Check className={`w-4 h-4 mx-auto ${c.highlight ? 'text-accent' : 'text-emerald-400'}`} />
+                            : val === false
+                            ? <X className="w-4 h-4 mx-auto text-red-400/60" />
+                            : <Minus className="w-4 h-4 mx-auto text-text-tertiary/40" />
+                          }
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-center text-xs text-text-tertiary mt-4">— sin información suficiente del competidor</p>
         </div>
       </section>
 
