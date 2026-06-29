@@ -15,11 +15,11 @@ import {
 import Link from 'next/link'
 import { cn } from '@/lib/utils/cn'
 import dynamic from 'next/dynamic'
-import { OnboardingChecklist } from '@/components/ui/onboarding-checklist'
-import { SalesSparkline } from '@/components/ui/sales-sparkline'
-import { SalesGoalWidget } from '@/components/ui/sales-goal'
 
 const KpiSparkline = dynamic(() => import('@/components/ui/kpi-sparkline').then(m => m.KpiSparkline), { ssr: false })
+const OnboardingChecklist = dynamic(() => import('@/components/ui/onboarding-checklist').then(m => m.OnboardingChecklist), { ssr: false })
+const SalesSparkline = dynamic(() => import('@/components/ui/sales-sparkline').then(m => m.SalesSparkline), { ssr: false })
+const SalesGoalWidget = dynamic(() => import('@/components/ui/sales-goal').then(m => m.SalesGoalWidget), { ssr: false })
 
 async function getKPIs(orgId: string) {
   const supabase = createClient()
