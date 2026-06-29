@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Building2, Bell, Shield, Palette, Save, TrendingUp, Tag, Plus, Trash2, X, FileText } from 'lucide-react'
+import { Building2, Bell, Shield, Palette, Save, TrendingUp, Tag, Plus, Trash2, FileText, Sparkles, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useTheme } from '@/lib/context/theme-context'
+import type { AppTheme, ThemeRadius, ThemeBackground } from '@/lib/context/theme-context'
 import type { Category } from '@/types'
 
 interface OrgData {
@@ -35,6 +37,8 @@ export default function ConfiguracionPage() {
     rfc: '', razon_social: '', regimen_fiscal: '', fiscal_zip: '', pac_username: '', pac_password: '',
   })
   const [savingFiscal, setSavingFiscal] = useState(false)
+  const [activeSection, setActiveSection] = useState<'empresa' | 'apariencia' | 'seguridad'>('empresa')
+  const { theme, setTheme } = useTheme()
 
   const fetchCategories = async () => {
     const { data } = await supabase.from('categories').select('*').order('name')
@@ -141,10 +145,34 @@ export default function ConfiguracionPage() {
   }
 
   const sections = [
-    { icon: Building2, label: 'Empresa', active: true },
-    { icon: Bell, label: 'Notificaciones', active: false },
-    { icon: Shield, label: 'Seguridad', active: false },
-    { icon: Palette, label: 'Apariencia', active: false },
+    { id: 'empresa', icon: Building2, label: 'Empresa' },
+    { id: 'apariencia', icon: Sparkles, label: 'Apariencia' },
+    { id: 'seguridad', icon: Shield, label: 'Seguridad' },
+  ] as const
+
+  const ACCENT_PRESETS = [
+    { label: 'Cyan',    hex: '#00C4D4' },
+    { label: 'Violeta', hex: '#8B5CF6' },
+    { label: 'Verde',   hex: '#10B981' },
+    { label: 'Azul',    hex: '#3B82F6' },
+    { label: 'Rosa',    hex: '#EC4899' },
+    { label: 'Naranja', hex: '#F97316' },
+    { label: 'Dorado',  hex: '#F59E0B' },
+    { label: 'Rojo',    hex: '#EF4444' },
+  ]
+
+  const BACKGROUNDS: { id: ThemeBackground; label: string; desc: string; preview: string }[] = [
+    { id: 'dark',   label: 'Negro puro',  desc: 'Oscuro absoluto', preview: '#0A0A0B' },
+    { id: 'warm',   label: 'Cálido',      desc: 'Tono café oscuro', preview: '#1A100A' },
+    { id: 'cool',   label: 'Frío',        desc: 'Tono azul oscuro', preview: '#080A0F' },
+    { id: 'aurora', label: 'Aurora',      desc: 'Con gradiente', preview: '#07080F' },
+  ]
+
+  const RADIUS_OPTIONS: { id: ThemeRadius; label: string; preview: string }[] = [
+    { id: 'compact', label: 'Compacto',    preview: '6px' },
+    { id: 'default', label: 'Normal',      preview: '12px' },
+    { id: 'rounded', label: 'Redondeado',  preview: '16px' },
+    { id: 'pill',    label: 'Pill',        preview: '24px' },
   ]
 
   return (
@@ -161,14 +189,15 @@ export default function ConfiguracionPage() {
         <div className="card p-3 h-fit space-y-0.5">
           {sections.map((s) => (
             <button
-              key={s.label}
+              key={s.id}
+              onClick={() => setActiveSection(s.id)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                s.active
+                activeSection === s.id
                   ? 'bg-surface-2 text-text-primary font-medium'
                   : 'text-text-secondary hover:text-text-primary hover:bg-surface-2/50'
               }`}
             >
-              <s.icon className={`w-4 h-4 ${s.active ? 'text-accent' : 'text-text-tertiary'}`} />
+              <s.icon className={`w-4 h-4 ${activeSection === s.id ? 'text-accent' : 'text-text-tertiary'}`} />
               {s.label}
             </button>
           ))}
@@ -176,6 +205,243 @@ export default function ConfiguracionPage() {
 
         {/* Content */}
         <div className="lg:col-span-3 space-y-6">
+          {/* ── APARIENCIA ── */}
+          {activeSection === 'apariencia' && (
+            <div className="space-y-6">
+              {/* Accent color */}
+              <div className="card p-6">
+                <h3 className="text-sm font-semibold text-text-primary mb-5 pb-3 border-b border-border flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-accent" />
+                  Color de acento
+                </h3>
+                <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 mb-4">
+                  {ACCENT_PRESETS.map((p) => (
+                    <button
+                      key={p.hex}
+                      onClick={() => setTheme({ accent: p.hex })}
+                      title={p.label}
+                      className="relative flex flex-col items-center gap-1.5 group"
+                    >
+                      <div
+                        className="w-9 h-9 rounded-xl border-2 transition-all duration-150 group-hover:scale-110"
+                        style={{
+                          background: p.hex,
+                          borderColor: theme.accent === p.hex ? '#fff' : 'transparent',
+                          boxShadow: theme.accent === p.hex ? `0 0 16px ${p.hex}80` : 'none',
+                        }}
+                      >
+                        {theme.accent === p.hex && (
+                          <Check className="w-4 h-4 text-white absolute inset-0 m-auto" />
+                        )}
+                      </div>
+                      <span className="text-2xs text-text-tertiary">{p.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <div>
+                  <label className="label">Color personalizado</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={theme.accent}
+                      onChange={(e) => setTheme({ accent: e.target.value })}
+                      className="w-10 h-10 rounded-lg border border-border cursor-pointer bg-surface-2 p-0.5"
+                    />
+                    <input
+                      type="text"
+                      value={theme.accent}
+                      onChange={(e) => {
+                        if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) setTheme({ accent: e.target.value })
+                      }}
+                      className="input w-32 font-mono text-sm"
+                      placeholder="#00C4D4"
+                    />
+                    <div
+                      className="flex-1 h-9 rounded-lg border border-border flex items-center justify-center text-xs font-medium transition-all"
+                      style={{ background: `${theme.accent}18`, color: theme.accent, borderColor: `${theme.accent}30` }}
+                    >
+                      Vista previa del acento
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Liquid Glass */}
+              <div className="card p-6">
+                <div className="flex items-start justify-between mb-5 pb-3 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-accent" />
+                    <h3 className="text-sm font-semibold text-text-primary">Liquid Glass</h3>
+                    {theme.glassMode && <span className="badge badge-accent text-2xs">ON</span>}
+                  </div>
+                  <button
+                    onClick={() => setTheme({ glassMode: !theme.glassMode })}
+                    className={`relative w-12 h-6 rounded-full transition-all duration-300 focus:outline-none ${
+                      theme.glassMode ? 'bg-accent' : 'bg-surface-4'
+                    }`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all duration-300 ${
+                      theme.glassMode ? 'left-7' : 'left-1'
+                    }`} />
+                  </button>
+                </div>
+                <p className="text-xs text-text-secondary mb-5">
+                  Efecto de vidrio esmerilado en toda la interfaz — cards, sidebar, modales y tablas. Inspirado en el diseño Liquid Glass de Apple.
+                </p>
+                <div className={`transition-all duration-300 ${theme.glassMode ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                  <label className="label">Intensidad del cristal</label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="range"
+                      min={4}
+                      max={48}
+                      step={4}
+                      value={theme.glassBlur}
+                      onChange={(e) => setTheme({ glassBlur: Number(e.target.value) })}
+                      className="flex-1 accent-current"
+                      style={{ accentColor: theme.accent }}
+                    />
+                    <span className="text-xs font-mono text-text-secondary w-12 text-right">
+                      {theme.glassBlur}px blur
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-2xs text-text-tertiary mt-1 px-0.5">
+                    <span>Sutil</span><span>Medio</span><span>Intenso</span><span>Máximo</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Corner radius */}
+              <div className="card p-6">
+                <h3 className="text-sm font-semibold text-text-primary mb-5 pb-3 border-b border-border">
+                  Esquinas
+                </h3>
+                <div className="grid grid-cols-4 gap-3">
+                  {RADIUS_OPTIONS.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => setTheme({ radius: r.id })}
+                      className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${
+                        theme.radius === r.id
+                          ? 'border-accent/50 bg-accent/10 text-accent'
+                          : 'border-border bg-surface-2 text-text-secondary hover:border-border-strong'
+                      }`}
+                    >
+                      <div
+                        className="w-10 h-8 bg-current opacity-20 border-2 border-current"
+                        style={{ borderRadius: r.preview }}
+                      />
+                      <span className="text-xs font-medium">{r.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Background */}
+              <div className="card p-6">
+                <h3 className="text-sm font-semibold text-text-primary mb-5 pb-3 border-b border-border">
+                  Fondo
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {BACKGROUNDS.map((bg) => (
+                    <button
+                      key={bg.id}
+                      onClick={() => setTheme({ background: bg.id })}
+                      className={`flex flex-col gap-2 p-3 rounded-xl border transition-all ${
+                        theme.background === bg.id
+                          ? 'border-accent/50 bg-accent/10'
+                          : 'border-border bg-surface-2 hover:border-border-strong'
+                      }`}
+                    >
+                      <div
+                        className="w-full h-10 rounded-lg border border-white/10"
+                        style={{ background: bg.preview }}
+                      />
+                      <div className="text-left">
+                        <p className={`text-xs font-medium ${theme.background === bg.id ? 'text-accent' : 'text-text-primary'}`}>{bg.label}</p>
+                        <p className="text-2xs text-text-tertiary">{bg.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Live preview */}
+              <div className="card p-6">
+                <h3 className="text-sm font-semibold text-text-primary mb-5 pb-3 border-b border-border flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-accent" />
+                  Vista previa en tiempo real
+                </h3>
+                <div className="rounded-xl overflow-hidden border border-border" style={{ background: theme.background === 'dark' ? '#0A0A0B' : theme.background === 'warm' ? '#0D0908' : theme.background === 'cool' ? '#080A0F' : '#07080F' }}>
+                  <div className="p-4 grid grid-cols-3 gap-3">
+                    {['Ventas del mes', 'Clientes activos', 'Cotizaciones'].map((label, i) => (
+                      <div
+                        key={label}
+                        className="p-3 rounded-xl border"
+                        style={theme.glassMode ? {
+                          background: 'linear-gradient(155deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%)',
+                          backdropFilter: `blur(${theme.glassBlur}px) saturate(180%)`,
+                          borderColor: 'rgba(255,255,255,0.13)',
+                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.15)',
+                        } : {
+                          background: '#111113',
+                          borderColor: 'rgba(255,255,255,0.10)',
+                        }}
+                      >
+                        <p className="text-2xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>{label}</p>
+                        <p className="text-sm font-bold text-white">{['$248,500', '142', '38'][i]}</p>
+                        <div className="mt-2 h-1 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                          <div className="h-full rounded-full transition-all" style={{ width: ['75%','55%','40%'][i], background: theme.accent }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="px-4 pb-4 flex items-center gap-2">
+                    <div
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                      style={{ background: theme.accent, boxShadow: `0 0 16px ${theme.accent}40` }}
+                    >
+                      Botón primario
+                    </div>
+                    <div
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium border"
+                      style={theme.glassMode ? {
+                        background: 'rgba(255,255,255,0.07)',
+                        backdropFilter: 'blur(8px)',
+                        borderColor: 'rgba(255,255,255,0.13)',
+                        color: '#ddd',
+                      } : {
+                        background: '#1E1E24',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        color: '#ddd',
+                      }}
+                    >
+                      Botón secundario
+                    </div>
+                    <span className="text-2xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${theme.accent}20`, color: theme.accent, border: `1px solid ${theme.accent}30` }}>
+                      Badge activo
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 rounded-xl bg-surface-2 border border-border">
+                <div>
+                  <p className="text-sm font-medium text-text-primary">Restablecer tema</p>
+                  <p className="text-xs text-text-tertiary">Vuelve al diseño original</p>
+                </div>
+                <button
+                  onClick={() => setTheme({ accent: '#00C4D4', glassMode: false, glassBlur: 20, radius: 'default', background: 'dark' })}
+                  className="btn-secondary btn btn-sm"
+                >
+                  Restablecer
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── EMPRESA ── */}
+          {activeSection === 'empresa' && <>
           {/* Profile */}
           <div className="card p-6">
             <h3 className="text-sm font-semibold text-text-primary mb-5 pb-3 border-b border-border">
@@ -411,7 +677,10 @@ export default function ConfiguracionPage() {
             </form>
           </div>
 
-          {/* Security */}
+          </>}
+
+          {/* ── SEGURIDAD ── */}
+          {activeSection === 'seguridad' && <>
           <div className="card p-6">
             <h3 className="text-sm font-semibold text-text-primary mb-5 pb-3 border-b border-border flex items-center gap-2">
               <Shield className="w-4 h-4 text-accent" />
@@ -435,7 +704,6 @@ export default function ConfiguracionPage() {
             </div>
           </div>
 
-          {/* Danger zone */}
           <div className="card p-6 border-red-500/20">
             <h3 className="text-sm font-semibold text-red-400 mb-4">Zona de peligro</h3>
             <div className="flex items-center justify-between">
@@ -446,6 +714,7 @@ export default function ConfiguracionPage() {
               <button className="btn-danger btn btn-sm">Eliminar cuenta</button>
             </div>
           </div>
+          </>}
         </div>
       </div>
     </div>

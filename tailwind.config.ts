@@ -11,13 +11,13 @@ const config: Config = {
     extend: {
       colors: {
         accent: {
-          DEFAULT: '#00C4D4',
+          DEFAULT: 'hsl(var(--accent-h) var(--accent-s) var(--accent-l) / <alpha-value>)',
           50: '#E5FAFB',
           100: '#CCFBFE',
           200: '#99F6FC',
           300: '#66F0FA',
-          400: '#33EAF7',
-          500: '#00C4D4',
+          400: 'hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) + 10%) / <alpha-value>)',
+          500: 'hsl(var(--accent-h) var(--accent-s) var(--accent-l) / <alpha-value>)',
           600: '#009DAA',
           700: '#007780',
           800: '#005057',
@@ -83,8 +83,8 @@ const config: Config = {
         'grid-pattern': `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
       },
       boxShadow: {
-        'glow-accent': '0 0 20px rgba(0, 196, 212, 0.15)',
-        'glow-accent-lg': '0 0 40px rgba(0, 196, 212, 0.2)',
+        'glow-accent': '0 0 20px hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.18)',
+        'glow-accent-lg': '0 0 40px hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.24)',
         'inner-border': 'inset 0 0 0 1px rgba(255,255,255,0.06)',
         'card': '0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.6)',
         'card-hover': '0 4px 12px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.4)',
