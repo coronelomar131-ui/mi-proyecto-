@@ -3,17 +3,30 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
-import { Plus, X, TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { Plus, X, TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownRight, Download, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
+import { EmptyState } from '@/components/ui/empty-state'
+import { TableSkeleton } from '@/components/ui/skeleton'
+import { FinanceMonthlyChart } from '@/components/ui/finance-chart'
 import type { Transaction } from '@/types'
 
 const INCOME_CATEGORIES = ['Ventas', 'Cobro de deuda', 'Devolución de proveedor', 'Otro ingreso']
 const EXPENSE_CATEGORIES = ['Proveedores', 'Nómina', 'Renta', 'Servicios', 'Logística', 'Otro egreso']
 
+interface DailyBrief {
+  efectivo: number
+  transferencia: number
+  credito: number
+  cheque: number
+  totalSales: number
+  saleCount: number
+}
+
 export default function FinanzasPage() {
   const supabase = createClient()
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [dailyBrief, setDailyBrief] = useState<DailyBrief | null>(null)
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -27,10 +40,30 @@ export default function FinanzasPage() {
     reference: '',
   })
 
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase.from('transactions').delete().eq('id', id)
+    if (error) toast.error('Error al eliminar')
+    else { toast.success('Movimiento eliminado'); fetchTransactions() }
+  }
+
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('transactions').select('*').order('date', { ascending: false }).limit(100)
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const [{ data }, { data: todaySales }] = await Promise.all([
+      supabase.from('transactions').select('*').order('date', { ascending: false }).limit(100),
+      supabase.from('sales').select('total, payment_method').gte('created_at', todayStart.toISOString()).neq('status', 'cancelada'),
+    ])
     setTransactions((data as Transaction[]) ?? [])
+
+    const brief: DailyBrief = { efectivo: 0, transferencia: 0, credito: 0, cheque: 0, totalSales: 0, saleCount: 0 }
+    todaySales?.forEach((s) => {
+      const pm = s.payment_method as keyof typeof brief
+      if (pm in brief) (brief[pm] as number) += s.total ?? 0
+      brief.totalSales += s.total ?? 0
+      brief.saleCount += 1
+    })
+    setDailyBrief(brief)
     setLoading(false)
   }, [])
 
@@ -72,9 +105,27 @@ export default function FinanzasPage() {
           <h1 className="page-title">Finanzas</h1>
           <p className="text-xs text-text-tertiary mt-0.5">Control de ingresos y egresos</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary btn">
-          <Plus className="w-4 h-4" /> Nuevo movimiento
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const csv = ['Fecha,Tipo,Categoría,Descripción,Referencia,Monto']
+              filtered.forEach((t) => {
+                csv.push(`${formatDate(t.date)},${t.type},${t.category},"${t.description}",${t.reference ?? ''},${t.amount}`)
+              })
+              const blob = new Blob([csv.join('\n')], { type: 'text/csv' })
+              const a = document.createElement('a')
+              a.href = URL.createObjectURL(blob)
+              a.download = `finanzas-${new Date().toISOString().split('T')[0]}.csv`
+              a.click()
+            }}
+            className="btn-secondary btn btn-sm"
+          >
+            <Download className="w-3.5 h-3.5" /> Exportar
+          </button>
+          <button onClick={() => setShowModal(true)} className="btn-primary btn">
+            <Plus className="w-4 h-4" /> Nuevo movimiento
+          </button>
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -110,6 +161,46 @@ export default function FinanzasPage() {
         </div>
       </div>
 
+      {/* Daily brief / Arqueo de caja */}
+      {dailyBrief && dailyBrief.saleCount > 0 && (
+        <div className="card p-5 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-accent" />
+              Resumen de hoy — {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </h3>
+            <div className="text-right">
+              <p className="text-lg font-bold text-accent">{formatCurrency(dailyBrief.totalSales)}</p>
+              <p className="text-xs text-text-tertiary">{dailyBrief.saleCount} venta{dailyBrief.saleCount !== 1 ? 's' : ''}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Efectivo', amount: dailyBrief.efectivo, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+              { label: 'Transferencia', amount: dailyBrief.transferencia, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+              { label: 'Crédito', amount: dailyBrief.credito, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+              { label: 'Cheque', amount: dailyBrief.cheque, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+            ].map((pm) => (
+              <div key={pm.label} className={cn('rounded-xl p-3 text-center', pm.bg, pm.amount === 0 && 'opacity-40')}>
+                <p className={cn('text-lg font-bold', pm.color)}>{formatCurrency(pm.amount)}</p>
+                <p className="text-xs text-text-tertiary mt-0.5">{pm.label}</p>
+              </div>
+            ))}
+          </div>
+          {dailyBrief.efectivo > 0 && (
+            <p className="text-xs text-text-tertiary mt-3 text-center">
+              Efectivo esperado en caja: <strong className="text-emerald-400">{formatCurrency(dailyBrief.efectivo)}</strong>
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Monthly chart */}
+      <div className="card p-5 mb-6">
+        <h3 className="text-sm font-semibold text-text-primary mb-4">Ingresos vs Egresos — 6 meses</h3>
+        <FinanceMonthlyChart />
+      </div>
+
       {/* Filter */}
       <div className="flex items-center gap-2 mb-4">
         {(['all', 'ingreso', 'egreso'] as const).map((t) => (
@@ -130,14 +221,20 @@ export default function FinanzasPage() {
               <th>Descripción</th>
               <th>Referencia</th>
               <th>Monto</th>
+              <th className="w-8"></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="text-center py-12"><span className="inline-block w-5 h-5 border-2 border-border border-t-accent rounded-full animate-spin" /></td></tr>
+              <TableSkeleton rows={8} cols={7} />
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-12 text-text-tertiary text-sm">
-                <DollarSign className="w-8 h-8 mx-auto mb-2 opacity-30" />No hay movimientos
+              <tr><td colSpan={7}>
+                <EmptyState
+                  icon={<DollarSign className="w-6 h-6" />}
+                  title={filterType === 'all' ? 'Sin movimientos aún' : filterType === 'ingreso' ? 'Sin ingresos registrados' : 'Sin egresos registrados'}
+                  description={filterType === 'all' ? 'Registra tus ingresos y egresos para llevar un control financiero claro.' : `No hay ${filterType === 'ingreso' ? 'ingresos' : 'egresos'} registrados en este período.`}
+                  action={filterType === 'all' ? { label: 'Registrar movimiento', onClick: () => setShowModal(true) } : undefined}
+                />
               </td></tr>
             ) : (
               filtered.map((t) => (
@@ -154,6 +251,14 @@ export default function FinanzasPage() {
                   <td className="font-mono text-xs text-text-tertiary">{t.reference ?? '—'}</td>
                   <td className={cn('font-semibold', t.type === 'ingreso' ? 'text-emerald-400' : 'text-red-400')}>
                     {t.type === 'egreso' ? '-' : '+'}{formatCurrency(t.amount)}
+                  </td>
+                  <td>
+                    <button
+                      onClick={() => { if (confirm('¿Eliminar este movimiento?')) handleDelete(t.id) }}
+                      className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-tertiary hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </td>
                 </tr>
               ))

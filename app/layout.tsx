@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Toaster } from 'react-hot-toast'
+import { KeyboardShortcutsModal } from '@/components/ui/keyboard-shortcuts'
+import { UserProvider } from '@/lib/context/user-context'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -12,6 +14,13 @@ export const metadata: Metadata = {
   keywords: ['ERP', 'distribuidores', 'inventario', 'ventas', 'CRM', 'SaaS'],
   authors: [{ name: 'GestorPro' }],
   robots: 'index, follow',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'GestorPro',
+  },
+  applicationName: 'GestorPro',
+  formatDetection: { telephone: false },
 }
 
 export const viewport: Viewport = {
@@ -24,7 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" className="dark">
       <body>
-        {children}
+        <UserProvider>
+          {children}
+          <KeyboardShortcutsModal />
         <Toaster
           position="top-right"
           gutter={8}
@@ -47,6 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             },
           }}
         />
+        </UserProvider>
       </body>
     </html>
   )

@@ -2,37 +2,107 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Building2, Bell, Shield, Palette, Save, TrendingUp } from 'lucide-react'
+import { Building2, Bell, Shield, Palette, Save, TrendingUp, Tag, Plus, Trash2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
+import type { Category } from '@/types'
+
+interface OrgData {
+  id: string
+  name: string
+  slug: string
+  plan: string
+}
 
 export default function ConfiguracionPage() {
   const supabase = createClient()
-  const [profile, setProfile] = useState<{ full_name: string; email: string; avatar_url?: string } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [savingOrg, setSavingOrg] = useState(false)
+  const [org, setOrg] = useState<OrgData | null>(null)
+  const [stats, setStats] = useState({ users: 0, products: 0, salesMonth: 0 })
   const [form, setForm] = useState({ full_name: '', email: '' })
+  const [orgForm, setOrgForm] = useState({ name: '' })
+  const [userId, setUserId] = useState('')
+  const [categories, setCategories] = useState<Category[]>([])
+  const [newCatName, setNewCatName] = useState('')
+  const [savingCat, setSavingCat] = useState(false)
+
+  const fetchCategories = async () => {
+    const { data } = await supabase.from('categories').select('*').order('name')
+    setCategories((data as Category[]) ?? [])
+  }
 
   useEffect(() => {
     const fetchProfile = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
-      const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
+      setUserId(session.user.id)
+      const { data } = await supabase
+        .from('profiles')
+        .select('*, organizations(*)')
+        .eq('id', session.user.id)
+        .single()
       if (data) {
-        setProfile(data as typeof profile)
         setForm({ full_name: data.full_name ?? '', email: data.email ?? '' })
+        const o = data.organizations as OrgData
+        if (o) {
+          setOrg(o)
+          setOrgForm({ name: o.name })
+          const [{ count: userCount }, { count: productCount }, { data: salesData }] = await Promise.all([
+            supabase.from('profiles').select('id', { count: 'exact' }).eq('organization_id', o.id).eq('is_active', true),
+            supabase.from('products').select('id', { count: 'exact' }).eq('organization_id', o.id).eq('is_active', true),
+            supabase.from('sales').select('total').eq('organization_id', o.id)
+              .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
+              .neq('status', 'cancelada'),
+          ])
+          const salesMonth = salesData?.reduce((s, r) => s + (r.total ?? 0), 0) ?? 0
+          setStats({ users: userCount ?? 0, products: productCount ?? 0, salesMonth })
+        }
       }
     }
     fetchProfile()
+    fetchCategories()
   }, [])
+
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newCatName.trim()) return
+    setSavingCat(true)
+    const { error } = await supabase.from('categories').insert({ name: newCatName.trim() })
+    if (error) {
+      toast.error(error.message.includes('duplicate') ? 'Esa categoría ya existe' : 'Error al crear categoría')
+    } else {
+      toast.success('Categoría creada')
+      setNewCatName('')
+      fetchCategories()
+    }
+    setSavingCat(false)
+  }
+
+  const handleDeleteCategory = async (id: string) => {
+    const { error } = await supabase.from('categories').delete().eq('id', id)
+    if (error) { toast.error('No se puede eliminar — tiene productos asignados'); return }
+    toast.success('Categoría eliminada')
+    fetchCategories()
+  }
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!userId) return
     setSaving(true)
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) { setSaving(false); return }
-
-    const { error } = await supabase.from('profiles').update({ full_name: form.full_name }).eq('id', session.user.id)
-    if (error) { toast.error('Error al guardar') } else { toast.success('Perfil actualizado') }
+    const { error } = await supabase.from('profiles').update({ full_name: form.full_name }).eq('id', userId)
+    if (error) toast.error('Error al guardar')
+    else toast.success('Perfil actualizado')
     setSaving(false)
+  }
+
+  const handleSaveOrg = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!org) return
+    setSavingOrg(true)
+    const { error } = await supabase.from('organizations').update({ name: orgForm.name }).eq('id', org.id)
+    if (error) toast.error('Error al actualizar empresa')
+    else { toast.success('Nombre de empresa actualizado'); setOrg({ ...org, name: orgForm.name }) }
+    setSavingOrg(false)
   }
 
   const sections = [
@@ -107,6 +177,32 @@ export default function ConfiguracionPage() {
             </form>
           </div>
 
+          {/* Org info */}
+          <div className="card p-6">
+            <h3 className="text-sm font-semibold text-text-primary mb-5 pb-3 border-b border-border flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-accent" />
+              Información de empresa
+            </h3>
+            <form onSubmit={handleSaveOrg} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Nombre de empresa</label>
+                  <input type="text" value={orgForm.name} onChange={(e) => setOrgForm({ name: e.target.value })} className="input" />
+                </div>
+                <div>
+                  <label className="label">Identificador (slug)</label>
+                  <input type="text" value={org?.slug ?? ''} disabled className="input opacity-50 cursor-not-allowed" />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button type="submit" disabled={savingOrg} className="btn-primary btn">
+                  <Save className="w-4 h-4" />
+                  {savingOrg ? 'Guardando...' : 'Guardar empresa'}
+                </button>
+              </div>
+            </form>
+          </div>
+
           {/* Plan info */}
           <div className="card p-6">
             <h3 className="text-sm font-semibold text-text-primary mb-5 pb-3 border-b border-border flex items-center gap-2">
@@ -116,20 +212,19 @@ export default function ConfiguracionPage() {
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg font-bold text-text-primary">Plan Pro</span>
-                  <span className="badge-accent px-2 py-0.5">Activo</span>
+                  <span className="text-lg font-bold text-text-primary capitalize">Plan {org?.plan ?? 'Pro'}</span>
+                  <span className="badge badge-accent">Activo</span>
                 </div>
                 <p className="text-sm text-text-secondary">Usuarios ilimitados · Productos ilimitados · Todos los módulos</p>
-                <p className="text-xs text-text-tertiary mt-1">Próxima facturación: 27 de julio de 2026</p>
               </div>
               <button className="btn-secondary btn btn-sm">Cambiar plan</button>
             </div>
             <div className="mt-4 pt-4 border-t border-border/50">
               <div className="grid grid-cols-3 gap-4 text-center">
                 {[
-                  { label: 'Usuarios activos', value: '—' },
-                  { label: 'Productos', value: '—' },
-                  { label: 'Ventas este mes', value: '—' },
+                  { label: 'Usuarios activos', value: stats.users || '—' },
+                  { label: 'Productos', value: stats.products || '—' },
+                  { label: 'Ventas este mes', value: stats.salesMonth ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(stats.salesMonth) : '—' },
                 ].map((stat) => (
                   <div key={stat.label}>
                     <p className="text-lg font-bold text-text-primary">{stat.value}</p>
@@ -138,6 +233,46 @@ export default function ConfiguracionPage() {
                 ))}
               </div>
             </div>
+          </div>
+
+          {/* Categories */}
+          <div className="card p-6">
+            <h3 className="text-sm font-semibold text-text-primary mb-5 pb-3 border-b border-border flex items-center gap-2">
+              <Tag className="w-4 h-4 text-accent" />
+              Categorías de productos
+            </h3>
+            <div className="space-y-2 mb-4">
+              {categories.length === 0 && (
+                <p className="text-sm text-text-tertiary text-center py-4">Sin categorías — agrega la primera</p>
+              )}
+              {categories.map((cat) => (
+                <div key={cat.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-2 group">
+                  <div className="flex items-center gap-2">
+                    <Tag className="w-3.5 h-3.5 text-text-tertiary" />
+                    <span className="text-sm text-text-primary">{cat.name}</span>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteCategory(cat.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded text-text-tertiary hover:text-red-400 transition-all"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <form onSubmit={handleAddCategory} className="flex gap-2">
+              <input
+                type="text"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="Nueva categoría..."
+                className="input flex-1"
+              />
+              <button type="submit" disabled={savingCat || !newCatName.trim()} className="btn-primary btn">
+                <Plus className="w-4 h-4" />
+                {savingCat ? 'Guardando...' : 'Agregar'}
+              </button>
+            </form>
           </div>
 
           {/* Security */}

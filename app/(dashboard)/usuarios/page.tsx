@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { formatDate, initials } from '@/lib/utils/format'
-import { UserPlus, X, Shield, ShoppingCart, Package, Crown } from 'lucide-react'
+import { formatDate, formatCurrency, initials } from '@/lib/utils/format'
+import { UserPlus, X, Shield, ShoppingCart, Package, Crown, Users, TrendingUp } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
+import { TableSkeleton } from '@/components/ui/skeleton'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import type { Profile, UserRole } from '@/types'
@@ -14,9 +16,16 @@ const ROLE_CONFIG: Record<UserRole, { label: string; icon: React.ElementType; ba
   almacen: { label: 'Almacén', icon: Package, badge: 'badge-green', description: 'Inventario y entregas' },
 }
 
+interface UserStats {
+  userId: string
+  salesCount: number
+  salesTotal: number
+}
+
 export default function UsuariosPage() {
   const supabase = createClient()
   const [users, setUsers] = useState<Profile[]>([])
+  const [userStats, setUserStats] = useState<UserStats[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -24,8 +33,22 @@ export default function UsuariosPage() {
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
-    setUsers((data as Profile[]) ?? [])
+    const since = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()
+    const [{ data: profiles }, { data: salesData }] = await Promise.all([
+      supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+      supabase.from('sales').select('user_id, total').gte('created_at', since).neq('status', 'cancelada'),
+    ])
+    setUsers((profiles as Profile[]) ?? [])
+
+    const statsMap: Record<string, UserStats> = {}
+    salesData?.forEach((s) => {
+      const uid = s.user_id as string
+      if (!uid) return
+      if (!statsMap[uid]) statsMap[uid] = { userId: uid, salesCount: 0, salesTotal: 0 }
+      statsMap[uid].salesCount += 1
+      statsMap[uid].salesTotal += s.total ?? 0
+    })
+    setUserStats(Object.values(statsMap))
     setLoading(false)
   }, [])
 
@@ -83,26 +106,75 @@ export default function UsuariosPage() {
         ))}
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <span className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin" />
+      {/* Monthly leaderboard */}
+      {!loading && userStats.length > 0 && (
+        <div className="card p-5 mb-6">
+          <h3 className="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-accent" />
+            Ventas del mes actual — ranking del equipo
+          </h3>
+          <div className="space-y-3">
+            {userStats.sort((a, b) => b.salesTotal - a.salesTotal).map((stat, i) => {
+              const user = users.find((u) => u.id === stat.userId)
+              if (!user) return null
+              const maxTotal = userStats[0]?.salesTotal ?? 1
+              const pct = maxTotal > 0 ? (stat.salesTotal / maxTotal) * 100 : 0
+              return (
+                <div key={stat.userId} className="flex items-center gap-3">
+                  <span className={cn('w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0', i === 0 ? 'bg-amber-400/20 text-amber-400' : i === 1 ? 'bg-surface-3 text-text-secondary' : 'bg-surface-3 text-text-tertiary')}>
+                    {i + 1}
+                  </span>
+                  <div className="w-7 h-7 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center text-xs font-semibold text-accent shrink-0">
+                    {initials(user.full_name)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-text-primary font-medium">{user.full_name}</span>
+                      <div className="flex items-center gap-2 text-right">
+                        <span className="text-text-tertiary">{stat.salesCount} venta{stat.salesCount !== 1 ? 's' : ''}</span>
+                        <span className="font-semibold text-text-primary">{formatCurrency(stat.salesTotal)}</span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 bg-surface-3 rounded-full overflow-hidden">
+                      <div className={cn('h-full rounded-full transition-all', i === 0 ? 'bg-amber-400' : 'bg-accent')} style={{ width: `${pct.toFixed(0)}%` }} />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
-      ) : (
-        <div className="table-container">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Usuario</th>
-                <th>Email</th>
-                <th>Rol</th>
-                <th>Estado</th>
-                <th>Miembro desde</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => {
+      )}
+
+      <div className="table-container">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Email</th>
+              <th>Rol</th>
+              <th>Estado</th>
+              <th>Ventas este mes</th>
+              <th>Miembro desde</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <TableSkeleton rows={4} cols={7} />
+            ) : users.length === 0 ? (
+              <tr><td colSpan={7}>
+                <EmptyState
+                  icon={<Users className="w-6 h-6" />}
+                  title="Sin usuarios aún"
+                  description="Invita a tu equipo para que puedan usar GestorPro."
+                  action={{ label: 'Invitar usuario', onClick: () => setShowModal(true) }}
+                />
+              </td></tr>
+            ) : (
+              users.map((user) => {
                 const roleConfig = ROLE_CONFIG[user.role]
+                const stats = userStats.find((s) => s.userId === user.id)
                 return (
                   <tr key={user.id}>
                     <td>
@@ -110,10 +182,13 @@ export default function UsuariosPage() {
                         <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center text-xs font-semibold text-accent">
                           {initials(user.full_name)}
                         </div>
-                        <span className="font-medium text-text-primary text-sm">{user.full_name}</span>
+                        <div>
+                          <p className="font-medium text-text-primary text-sm">{user.full_name}</p>
+                          <span className={cn('badge text-2xs', roleConfig?.badge)}>{roleConfig?.label}</span>
+                        </div>
                       </div>
                     </td>
-                    <td className="text-text-secondary">{user.email}</td>
+                    <td className="text-text-secondary text-sm">{user.email}</td>
                     <td>
                       <select
                         className="bg-surface-2 border border-border rounded-lg px-2 py-1 text-xs text-text-secondary focus:outline-none focus:ring-1 focus:ring-accent/50"
@@ -130,6 +205,16 @@ export default function UsuariosPage() {
                         {user.is_active ? 'Activo' : 'Inactivo'}
                       </span>
                     </td>
+                    <td>
+                      {stats ? (
+                        <div>
+                          <p className="text-sm font-semibold text-text-primary">{formatCurrency(stats.salesTotal)}</p>
+                          <p className="text-xs text-text-tertiary">{stats.salesCount} pedidos</p>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-text-tertiary">Sin ventas</span>
+                      )}
+                    </td>
                     <td className="text-text-tertiary text-xs">{formatDate(user.created_at)}</td>
                     <td>
                       <button
@@ -141,11 +226,11 @@ export default function UsuariosPage() {
                     </td>
                   </tr>
                 )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {showModal && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>

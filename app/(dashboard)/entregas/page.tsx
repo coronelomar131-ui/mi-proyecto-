@@ -3,9 +3,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils/format'
-import { Truck, MapPin, Clock, CheckCircle, XCircle, Navigation } from 'lucide-react'
+import { Truck, MapPin, Clock, CheckCircle, XCircle, Navigation, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
+import { EmptyState } from '@/components/ui/empty-state'
+import { CardSkeleton } from '@/components/ui/skeleton'
 import type { Delivery, DeliveryStatus } from '@/types'
 
 const STATUS_CONFIG: Record<DeliveryStatus, { label: string; badge: string; icon: React.ElementType }> = {
@@ -27,6 +29,9 @@ export default function EntregasPage() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState<DeliveryStatus | 'all'>('all')
+  const [failingDelivery, setFailingDelivery] = useState<Delivery | null>(null)
+  const [failureReason, setFailureReason] = useState('')
+  const [savingFail, setSavingFail] = useState(false)
 
   const fetchDeliveries = useCallback(async () => {
     setLoading(true)
@@ -64,10 +69,18 @@ export default function EntregasPage() {
     fetchDeliveries()
   }
 
-  const handleMarkFailed = async (id: string) => {
-    const { error } = await supabase.from('deliveries').update({ status: 'fallido' }).eq('id', id)
-    if (error) { toast.error('Error'); return }
+  const handleMarkFailed = async () => {
+    if (!failingDelivery) return
+    setSavingFail(true)
+    const { error } = await supabase.from('deliveries').update({
+      status: 'fallido',
+      notes: failureReason.trim() || null,
+    }).eq('id', failingDelivery.id)
+    if (error) { toast.error('Error al marcar entrega'); setSavingFail(false); return }
     toast.error('Entrega marcada como fallida')
+    setFailingDelivery(null)
+    setFailureReason('')
+    setSavingFail(false)
     fetchDeliveries()
   }
 
@@ -106,14 +119,15 @@ export default function EntregasPage() {
 
       {/* Cards */}
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <span className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin" />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Truck className="w-10 h-10 text-text-tertiary mb-3 opacity-40" />
-          <p className="text-text-secondary text-sm">No hay entregas en este estado</p>
-        </div>
+        <EmptyState
+          icon={<Truck className="w-6 h-6" />}
+          title={filterStatus === 'all' ? 'Sin entregas aún' : `Sin entregas ${STATUS_CONFIG[filterStatus]?.label?.toLowerCase()}`}
+          description={filterStatus === 'all' ? 'Las entregas aparecerán aquí cuando se creen ventas con envío.' : 'No hay entregas en este estado en este momento.'}
+        />
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((delivery) => {
@@ -150,10 +164,16 @@ export default function EntregasPage() {
                 </div>
 
                 {delivery.address && (
-                  <div className="flex items-start gap-2 text-xs text-text-tertiary mb-3">
-                    <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                    <span className="line-clamp-2">{delivery.address}</span>
-                  </div>
+                  <a
+                    href={`https://maps.google.com/?q=${encodeURIComponent(delivery.address)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-start gap-2 text-xs text-text-tertiary mb-3 hover:text-accent transition-colors group/map"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5 group-hover/map:text-accent" />
+                    <span className="line-clamp-2 group-hover/map:underline">{delivery.address}</span>
+                  </a>
                 )}
 
                 {delivery.scheduled_date && (
@@ -185,7 +205,7 @@ export default function EntregasPage() {
                       </button>
                     )}
                     {delivery.status === 'en_ruta' && (
-                      <button onClick={() => handleMarkFailed(delivery.id)} className="btn-danger btn btn-sm px-3">
+                      <button onClick={() => { setFailingDelivery(delivery); setFailureReason('') }} className="btn-danger btn btn-sm px-3" title="Marcar como fallida">
                         <XCircle className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -194,6 +214,48 @@ export default function EntregasPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Failure reason modal */}
+      {failingDelivery && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setFailingDelivery(null)}>
+          <div className="modal max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <XCircle className="w-4 h-4 text-red-400" />
+                <h2 className="font-semibold text-text-primary">Marcar entrega fallida</h2>
+              </div>
+              <button onClick={() => setFailingDelivery(null)} className="btn-ghost btn p-1.5">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-text-secondary">
+                ¿Por qué falló la entrega? (opcional)
+              </p>
+              <textarea
+                value={failureReason}
+                onChange={(e) => setFailureReason(e.target.value)}
+                placeholder="Ej: Cliente ausente, dirección incorrecta, acceso restringido..."
+                className="input resize-none text-sm"
+                rows={3}
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <button onClick={() => setFailingDelivery(null)} className="btn-secondary btn flex-1">
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleMarkFailed}
+                  disabled={savingFail}
+                  className="btn-danger btn flex-1"
+                >
+                  {savingFail ? 'Guardando...' : 'Confirmar falla'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

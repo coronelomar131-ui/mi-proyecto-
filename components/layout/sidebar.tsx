@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Menu,
   X,
+  Monitor,
 } from 'lucide-react'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -28,6 +29,7 @@ import type { Profile } from '@/types'
 
 const navItems = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'vendedor', 'almacen'] },
+  { label: 'Punto de Venta', href: '/dashboard/pos', icon: Monitor, roles: ['admin', 'vendedor'] },
   { label: 'Ventas', href: '/dashboard/ventas', icon: ShoppingCart, roles: ['admin', 'vendedor'] },
   { label: 'Clientes', href: '/dashboard/clientes', icon: Users, roles: ['admin', 'vendedor'] },
   { label: 'Inventario', href: '/dashboard/inventario', icon: Package, roles: ['admin', 'almacen'] },
@@ -75,7 +77,7 @@ export function Sidebar({ profile }: SidebarProps) {
           <div>
             <p className="text-sm font-semibold text-text-primary leading-none">GestorPro</p>
             <p className="text-2xs text-text-tertiary mt-0.5 truncate max-w-[120px]">
-              {profile?.organization_id ? 'Mi empresa' : 'Demo'}
+              {profile?.organizations?.name ?? (profile?.organization_id ? 'Mi empresa' : 'Demo')}
             </p>
           </div>
         </Link>
