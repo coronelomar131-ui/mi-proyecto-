@@ -59,6 +59,7 @@ export default function VentasPage() {
   const [loadingItems, setLoadingItems] = useState(false)
   const [stampingCfdi, setStampingCfdi] = useState(false)
   const [orgId, setOrgId] = useState('')
+  const [userId, setUserId] = useState('')
 
   const debouncedSearch = useDebounce(search)
 
@@ -94,6 +95,7 @@ export default function VentasPage() {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return
+      setUserId(session.user.id)
       const { data } = await supabase.from('profiles').select('organization_id').eq('id', session.user.id).single()
       if (data) setOrgId(data.organization_id)
     })
@@ -157,6 +159,7 @@ export default function VentasPage() {
 
     const { data: saleData, error } = await supabase.from('sales').insert({
       organization_id: orgId,
+      user_id: userId,
       customer_id: selectedCustomer.id,
       status: 'pendiente',
       payment_method: paymentMethod,
@@ -211,6 +214,7 @@ export default function VentasPage() {
     const customer = sale.customer as unknown as { address?: string; city?: string }
     const address = [customer?.address, customer?.city].filter(Boolean).join(', ') || 'Dirección por definir'
     const { error } = await supabase.from('deliveries').insert({
+      organization_id: orgId,
       sale_id: sale.id,
       status: 'pendiente',
       address,

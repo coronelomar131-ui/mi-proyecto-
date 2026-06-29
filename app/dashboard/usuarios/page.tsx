@@ -59,9 +59,20 @@ export default function UsuariosPage() {
     if (!form.email || !form.full_name) { toast.error('Completa todos los campos'); return }
     setSaving(true)
 
-    toast.success(`Invitación enviada a ${form.email}. (Implementa Supabase Auth Admin para invitar usuarios.)`)
-    setShowModal(false)
-    setForm({ email: '', full_name: '', role: 'vendedor' })
+    const res = await fetch('/api/users/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+    const data = await res.json()
+
+    if (!res.ok) {
+      toast.error(data.error ?? 'Error al enviar invitación')
+    } else {
+      toast.success(`Invitación enviada a ${form.email}`)
+      setShowModal(false)
+      setForm({ email: '', full_name: '', role: 'vendedor' })
+    }
     setSaving(false)
   }
 
