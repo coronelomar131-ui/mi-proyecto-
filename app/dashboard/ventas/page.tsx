@@ -665,12 +665,12 @@ export default function VentasPage() {
               {/* CFDI / Factura electrónica */}
               <div className="border-t border-border pt-4">
                 <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-3">Factura electrónica (CFDI)</p>
-                {(viewSale as Sale & { cfdi_status?: string; cfdi_uuid?: string }).cfdi_status === 'timbrado' ? (
+                {viewSale.cfdi_status === 'timbrado' ? (
                   <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
                     <FileCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                     <div>
                       <p className="text-xs font-semibold text-emerald-400">Timbrado ante el SAT</p>
-                      <p className="text-xs text-text-tertiary font-mono mt-0.5">{(viewSale as Sale & { cfdi_uuid?: string }).cfdi_uuid}</p>
+                      <p className="text-xs text-text-tertiary font-mono mt-0.5">{viewSale.cfdi_uuid}</p>
                     </div>
                   </div>
                 ) : (

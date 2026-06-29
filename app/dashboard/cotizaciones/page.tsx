@@ -193,6 +193,8 @@ export default function CotizacionesPage() {
     const { count: saleCount } = await supabase.from('sales').select('id', { count: 'exact' })
     const saleFolio = `VTA-${String((saleCount ?? 0) + 1).padStart(5, '0')}`
     const { data: saleData, error: saleErr } = await supabase.from('sales').insert({
+      organization_id: orgId,
+      user_id: userId,
       customer_id: quote.customer_id,
       status: 'pendiente',
       payment_method: 'efectivo',
@@ -340,9 +342,9 @@ export default function CotizacionesPage() {
                         )
                       })()}
                       {(q.status === 'enviada' || q.status === 'borrador') && (
-                        (q as Quote & { payment_link_url?: string }).payment_link_url ? (
+                        q.payment_link_url ? (
                           <a
-                            href={(q as Quote & { payment_link_url?: string }).payment_link_url}
+                            href={q.payment_link_url}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="btn-ghost btn btn-sm p-1.5 text-text-tertiary hover:text-accent"
