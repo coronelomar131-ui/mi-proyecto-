@@ -34,6 +34,7 @@ export default function PosPage() {
   const [saving, setSaving] = useState(false)
   const [lastSale, setLastSale] = useState<{ folio: string; total: number; id: string } | null>(null)
   const [orgId, setOrgId] = useState('')
+  const [userId, setUserId] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
 
   const fetchData = useCallback(async () => {
@@ -48,6 +49,7 @@ export default function PosPage() {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return
+      setUserId(session.user.id)
       const { data } = await supabase.from('profiles').select('organization_id').eq('id', session.user.id).single()
       if (data) setOrgId(data.organization_id)
     })
@@ -100,6 +102,7 @@ export default function PosPage() {
 
     const { data: saleData, error } = await supabase.from('sales').insert({
       organization_id: orgId,
+      user_id: userId,
       customer_id: selectedCustomer.id,
       status: 'confirmada',
       payment_method: paymentMethod,

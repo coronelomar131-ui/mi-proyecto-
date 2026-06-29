@@ -45,6 +45,7 @@ export default function CotizacionesPage() {
   const [quoteNotes, setQuoteNotes] = useState('')
   const [generatingLink, setGeneratingLink] = useState<string | null>(null)
   const [orgId, setOrgId] = useState('')
+  const [userId, setUserId] = useState('')
 
   const searchParams = useSearchParams()
 
@@ -74,6 +75,7 @@ export default function CotizacionesPage() {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return
+      setUserId(session.user.id)
       const { data } = await supabase.from('profiles').select('organization_id').eq('id', session.user.id).single()
       if (data) setOrgId(data.organization_id)
     })
@@ -116,6 +118,7 @@ export default function CotizacionesPage() {
     const folio = `COT-${String((quoteCount ?? 0) + 1).padStart(5, '0')}`
     const { data: quoteData, error } = await supabase.from('quotes').insert({
       organization_id: orgId,
+      user_id: userId,
       customer_id: selectedCustomer.id,
       status: 'borrador',
       folio,
