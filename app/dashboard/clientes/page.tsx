@@ -242,6 +242,7 @@ export default function ClientesPage() {
       toast.error('Error al registrar pago')
     } else {
       await supabase.from('transactions').insert({
+        organization_id: orgId,
         type: 'ingreso',
         category: 'Cobro de deuda',
         description: `Pago de ${viewCustomer.name}`,
