@@ -46,6 +46,7 @@ export default function InventarioPage() {
   const [bulkPct, setBulkPct] = useState('')
   const [bulkField, setBulkField] = useState<'sale_price' | 'cost_price'>('sale_price')
   const [savingBulk, setSavingBulk] = useState(false)
+  const [orgId, setOrgId] = useState('')
 
   const searchParams = useSearchParams()
 
@@ -81,6 +82,13 @@ export default function InventarioPage() {
     setLoading(false)
   }, [page, debouncedSearch, filterLow, filterCategory])
 
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const { data } = await supabase.from('profiles').select('organization_id').eq('id', session.user.id).single()
+      if (data) setOrgId(data.organization_id)
+    })
+  }, [])
   useEffect(() => { reset() }, [debouncedSearch, filterLow, filterCategory])
   useEffect(() => { fetchProducts() }, [fetchProducts])
   useEffect(() => { if (searchParams.get('new') === '1') setShowModal(true) }, [searchParams])
@@ -95,6 +103,7 @@ export default function InventarioPage() {
     setSaving(true)
 
     const { error } = await supabase.from('products').insert({
+      organization_id: orgId,
       sku: form.sku,
       name: form.name,
       description: form.description || null,
@@ -194,6 +203,7 @@ export default function InventarioPage() {
     let success = 0; let failed = 0
     for (const row of importPreview) {
       const { error } = await supabase.from('products').insert({
+        organization_id: orgId,
         sku: row.sku,
         name: row.name,
         sale_price: row.sale_price,

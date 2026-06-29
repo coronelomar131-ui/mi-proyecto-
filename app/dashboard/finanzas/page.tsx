@@ -40,6 +40,8 @@ export default function FinanzasPage() {
     reference: '',
   })
 
+  const [orgId, setOrgId] = useState('')
+
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from('transactions').delete().eq('id', id)
     if (error) toast.error('Error al eliminar')
@@ -67,6 +69,13 @@ export default function FinanzasPage() {
     setLoading(false)
   }, [])
 
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const { data } = await supabase.from('profiles').select('organization_id').eq('id', session.user.id).single()
+      if (data) setOrgId(data.organization_id)
+    })
+  }, [])
   useEffect(() => { fetchTransactions() }, [fetchTransactions])
 
   const filtered = transactions.filter((t) => filterType === 'all' || t.type === filterType)
@@ -81,6 +90,7 @@ export default function FinanzasPage() {
     setSaving(true)
 
     const { error } = await supabase.from('transactions').insert({
+      organization_id: orgId,
       type: form.type,
       category: form.category,
       description: form.description,

@@ -47,6 +47,7 @@ export default function ClientesPage() {
   const [tagInput, setTagInput] = useState('')
   const [savingTags, setSavingTags] = useState(false)
   const [showCartera, setShowCartera] = useState(false)
+  const [orgId, setOrgId] = useState('')
 
   const debouncedSearch = useDebounce(search)
 
@@ -71,6 +72,13 @@ export default function ClientesPage() {
     setLoading(false)
   }, [page, debouncedSearch])
 
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const { data } = await supabase.from('profiles').select('organization_id').eq('id', session.user.id).single()
+      if (data) setOrgId(data.organization_id)
+    })
+  }, [])
   useEffect(() => { reset() }, [debouncedSearch])
   useEffect(() => { fetchCustomers() }, [fetchCustomers])
   useEffect(() => { if (searchParams.get('new') === '1') setShowModal(true) }, [searchParams])
@@ -90,6 +98,7 @@ export default function ClientesPage() {
     setSaving(true)
 
     const { error } = await supabase.from('customers').insert({
+      organization_id: orgId,
       name: result.data.name,
       email: result.data.email || null,
       phone: result.data.phone || null,
@@ -167,6 +176,7 @@ export default function ClientesPage() {
     let success = 0
     for (const row of importPreview) {
       const { error } = await supabase.from('customers').insert({
+        organization_id: orgId,
         name: row.name,
         email: row.email || null,
         phone: row.phone || null,
@@ -695,7 +705,7 @@ export default function ClientesPage() {
                 </div>
                 <div>
                   <label className="label">RFC</label>
-                  <input type="text" value={form.rfc} onChange={(e) => setForm(p => ({ ...p, rfc: e.target.value }))} className="input" placeholder="ABC123456XYZ" />
+                  <input type="text" value={form.rfc} onChange={(e) => setForm(p => ({ ...p, rfc: e.target.value.toUpperCase() }))} className="input" placeholder="ABC123456XYZ" />
                 </div>
                 <div className="col-span-2">
                   <label className="label">Dirección</label>

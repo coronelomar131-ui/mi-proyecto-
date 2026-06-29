@@ -40,6 +40,7 @@ export default function ProveedoresPage() {
   const [pendingOrders, setPendingOrders] = useState<PurchaseWithItems[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
   const [receivingId, setReceivingId] = useState<string | null>(null)
+  const [orgId, setOrgId] = useState('')
 
   const fetchSuppliers = useCallback(async () => {
     setLoading(true)
@@ -48,6 +49,13 @@ export default function ProveedoresPage() {
     setLoading(false)
   }, [])
 
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const { data } = await supabase.from('profiles').select('organization_id').eq('id', session.user.id).single()
+      if (data) setOrgId(data.organization_id)
+    })
+  }, [])
   useEffect(() => { fetchSuppliers() }, [fetchSuppliers])
 
   const filtered = suppliers.filter(
@@ -63,6 +71,7 @@ export default function ProveedoresPage() {
     setSaving(true)
 
     const { error } = await supabase.from('suppliers').insert({
+      organization_id: orgId,
       name: form.name,
       contact_name: form.contact_name || null,
       email: form.email || null,
@@ -110,6 +119,7 @@ export default function ProveedoresPage() {
     const { count } = await supabase.from('purchases').select('id', { count: 'exact' })
     const folio = `OC-${String((count ?? 0) + 1).padStart(5, '0')}`
     const { data: purchaseData, error } = await supabase.from('purchases').insert({
+      organization_id: orgId,
       supplier_id: orderSupplier.id,
       folio,
       status: 'pendiente',

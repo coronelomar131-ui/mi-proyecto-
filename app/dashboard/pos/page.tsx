@@ -33,6 +33,7 @@ export default function PosPage() {
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'transferencia' | 'credito'>('efectivo')
   const [saving, setSaving] = useState(false)
   const [lastSale, setLastSale] = useState<{ folio: string; total: number; id: string } | null>(null)
+  const [orgId, setOrgId] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
 
   const fetchData = useCallback(async () => {
@@ -44,6 +45,13 @@ export default function PosPage() {
     setCustomers((custs as Customer[]) ?? [])
   }, [])
 
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const { data } = await supabase.from('profiles').select('organization_id').eq('id', session.user.id).single()
+      if (data) setOrgId(data.organization_id)
+    })
+  }, [])
   useEffect(() => { fetchData() }, [fetchData])
   useEffect(() => { searchRef.current?.focus() }, [])
 
@@ -91,6 +99,7 @@ export default function PosPage() {
     const folio = `VTA-${String((saleCount ?? 0) + 1).padStart(5, '0')}`
 
     const { data: saleData, error } = await supabase.from('sales').insert({
+      organization_id: orgId,
       customer_id: selectedCustomer.id,
       status: 'confirmada',
       payment_method: paymentMethod,

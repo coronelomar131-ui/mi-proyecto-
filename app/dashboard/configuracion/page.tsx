@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Building2, Bell, Shield, Palette, Save, TrendingUp, Tag, Plus, Trash2, X } from 'lucide-react'
+import { Building2, Bell, Shield, Palette, Save, TrendingUp, Tag, Plus, Trash2, X, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { Category } from '@/types'
 
@@ -11,6 +11,12 @@ interface OrgData {
   name: string
   slug: string
   plan: string
+  rfc?: string
+  razon_social?: string
+  regimen_fiscal?: string
+  fiscal_zip?: string
+  pac_username?: string
+  pac_password?: string
 }
 
 export default function ConfiguracionPage() {
@@ -25,6 +31,10 @@ export default function ConfiguracionPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [newCatName, setNewCatName] = useState('')
   const [savingCat, setSavingCat] = useState(false)
+  const [fiscalForm, setFiscalForm] = useState({
+    rfc: '', razon_social: '', regimen_fiscal: '', fiscal_zip: '', pac_username: '', pac_password: '',
+  })
+  const [savingFiscal, setSavingFiscal] = useState(false)
 
   const fetchCategories = async () => {
     const { data } = await supabase.from('categories').select('*').order('name')
@@ -47,6 +57,14 @@ export default function ConfiguracionPage() {
         if (o) {
           setOrg(o)
           setOrgForm({ name: o.name })
+          setFiscalForm({
+            rfc: o.rfc ?? '',
+            razon_social: o.razon_social ?? '',
+            regimen_fiscal: o.regimen_fiscal ?? '',
+            fiscal_zip: o.fiscal_zip ?? '',
+            pac_username: o.pac_username ?? '',
+            pac_password: o.pac_password ?? '',
+          })
           const [{ count: userCount }, { count: productCount }, { data: salesData }] = await Promise.all([
             supabase.from('profiles').select('id', { count: 'exact' }).eq('organization_id', o.id).eq('is_active', true),
             supabase.from('products').select('id', { count: 'exact' }).eq('organization_id', o.id).eq('is_active', true),
@@ -67,7 +85,7 @@ export default function ConfiguracionPage() {
     e.preventDefault()
     if (!newCatName.trim()) return
     setSavingCat(true)
-    const { error } = await supabase.from('categories').insert({ name: newCatName.trim() })
+    const { error } = await supabase.from('categories').insert({ organization_id: org?.id, name: newCatName.trim() })
     if (error) {
       toast.error(error.message.includes('duplicate') ? 'Esa categoría ya existe' : 'Error al crear categoría')
     } else {
@@ -103,6 +121,23 @@ export default function ConfiguracionPage() {
     if (error) toast.error('Error al actualizar empresa')
     else { toast.success('Nombre de empresa actualizado'); setOrg({ ...org, name: orgForm.name }) }
     setSavingOrg(false)
+  }
+
+  const handleSaveFiscal = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!org) return
+    setSavingFiscal(true)
+    const { error } = await supabase.from('organizations').update({
+      rfc: fiscalForm.rfc || null,
+      razon_social: fiscalForm.razon_social || null,
+      regimen_fiscal: fiscalForm.regimen_fiscal || null,
+      fiscal_zip: fiscalForm.fiscal_zip || null,
+      pac_username: fiscalForm.pac_username || null,
+      pac_password: fiscalForm.pac_password || null,
+    }).eq('id', org.id)
+    if (error) toast.error('Error al guardar datos fiscales')
+    else toast.success('Datos fiscales guardados')
+    setSavingFiscal(false)
   }
 
   const sections = [
@@ -272,6 +307,107 @@ export default function ConfiguracionPage() {
                 <Plus className="w-4 h-4" />
                 {savingCat ? 'Guardando...' : 'Agregar'}
               </button>
+            </form>
+          </div>
+
+          {/* CFDI / Fiscal */}
+          <div className="card p-6">
+            <h3 className="text-sm font-semibold text-text-primary mb-5 pb-3 border-b border-border flex items-center gap-2">
+              <FileText className="w-4 h-4 text-accent" />
+              Datos fiscales / CFDI
+            </h3>
+            <form onSubmit={handleSaveFiscal} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">RFC del emisor</label>
+                  <input
+                    type="text"
+                    value={fiscalForm.rfc}
+                    onChange={(e) => setFiscalForm(p => ({ ...p, rfc: e.target.value.toUpperCase() }))}
+                    className="input"
+                    placeholder="XAXX010101000"
+                    maxLength={13}
+                  />
+                </div>
+                <div>
+                  <label className="label">Razón social</label>
+                  <input
+                    type="text"
+                    value={fiscalForm.razon_social}
+                    onChange={(e) => setFiscalForm(p => ({ ...p, razon_social: e.target.value }))}
+                    className="input"
+                    placeholder="Mi Empresa S.A. de C.V."
+                  />
+                </div>
+                <div>
+                  <label className="label">Régimen fiscal</label>
+                  <select
+                    value={fiscalForm.regimen_fiscal}
+                    onChange={(e) => setFiscalForm(p => ({ ...p, regimen_fiscal: e.target.value }))}
+                    className="input"
+                  >
+                    <option value="">Seleccionar régimen</option>
+                    <option value="601">601 – General de Ley Personas Morales</option>
+                    <option value="603">603 – Personas Morales con Fines no Lucrativos</option>
+                    <option value="605">605 – Sueldos y Salarios</option>
+                    <option value="606">606 – Arrendamiento</option>
+                    <option value="608">608 – Demás ingresos</option>
+                    <option value="612">612 – Personas Físicas con Actividades Empresariales</option>
+                    <option value="616">616 – Sin obligaciones fiscales</option>
+                    <option value="621">621 – Incorporación Fiscal</option>
+                    <option value="625">625 – Régimen de las Actividades Empresariales con ingresos a través de Plataformas Tecnológicas</option>
+                    <option value="626">626 – Régimen Simplificado de Confianza</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Código postal fiscal</label>
+                  <input
+                    type="text"
+                    value={fiscalForm.fiscal_zip}
+                    onChange={(e) => setFiscalForm(p => ({ ...p, fiscal_zip: e.target.value }))}
+                    className="input"
+                    placeholder="06600"
+                    maxLength={5}
+                  />
+                </div>
+              </div>
+              <div className="pt-2 border-t border-border/50">
+                <p className="text-xs font-medium text-text-secondary mb-3">Credenciales PAC (SW SapienS)</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">Usuario PAC</label>
+                    <input
+                      type="text"
+                      value={fiscalForm.pac_username}
+                      onChange={(e) => setFiscalForm(p => ({ ...p, pac_username: e.target.value }))}
+                      className="input"
+                      placeholder="usuario@empresa.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Contraseña PAC</label>
+                    <input
+                      type="password"
+                      value={fiscalForm.pac_password}
+                      onChange={(e) => setFiscalForm(p => ({ ...p, pac_password: e.target.value }))}
+                      className="input"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <p className="text-xs text-blue-400">
+                  Para timbrar CFDIs necesitas: RFC, razón social, régimen fiscal, código postal y credenciales PAC activas con SW SapienS.
+                  Las variables de entorno <code className="font-mono bg-blue-500/20 px-1 rounded">CONEKTA_PRIVATE_KEY</code>, <code className="font-mono bg-blue-500/20 px-1 rounded">WHATSAPP_TOKEN</code> y <code className="font-mono bg-blue-500/20 px-1 rounded">WHATSAPP_PHONE_NUMBER_ID</code> se configuran en Vercel.
+                </p>
+              </div>
+              <div className="flex justify-end">
+                <button type="submit" disabled={savingFiscal} className="btn-primary btn">
+                  <Save className="w-4 h-4" />
+                  {savingFiscal ? 'Guardando...' : 'Guardar datos fiscales'}
+                </button>
+              </div>
             </form>
           </div>
 
