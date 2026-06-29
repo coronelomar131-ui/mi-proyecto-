@@ -1,7 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import { Toaster } from 'react-hot-toast'
-import { KeyboardShortcutsModal } from '@/components/ui/keyboard-shortcuts'
-import { UserProvider } from '@/lib/context/user-context'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -33,10 +31,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" className="dark">
       <body>
-        <UserProvider>
+        <>
           {children}
-          <KeyboardShortcutsModal />
-        <Toaster
+          <Toaster
           position="top-right"
           gutter={8}
           toastOptions={{
@@ -58,7 +55,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             },
           }}
         />
-        </UserProvider>
+        </>
       </body>
     </html>
   )

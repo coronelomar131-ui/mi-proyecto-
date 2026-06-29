@@ -1,10 +1,7 @@
-import { Suspense } from 'react'
-import { RegisterForm } from './register-form'
+import dynamic from 'next/dynamic'
+
+const RegisterForm = dynamic(() => import('./register-form').then(m => m.RegisterForm), { ssr: false })
 
 export default function RegisterPage() {
-  return (
-    <Suspense fallback={null}>
-      <RegisterForm />
-    </Suspense>
-  )
+  return <RegisterForm />
 }
