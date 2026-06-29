@@ -93,6 +93,9 @@ export interface Sale {
   tax: number
   total: number
   notes?: string
+  cfdi_status?: string
+  cfdi_uuid?: string
+  cfdi_xml?: string
   created_at: string
   updated_at: string
   customer?: Customer
@@ -126,6 +129,9 @@ export interface Quote {
   tax: number
   total: number
   notes?: string
+  payment_link_url?: string
+  payment_link_id?: string
+  payment_link_exp?: string
   created_at: string
   updated_at: string
   customer?: Customer

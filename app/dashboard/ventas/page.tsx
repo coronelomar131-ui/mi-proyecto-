@@ -58,6 +58,7 @@ export default function VentasPage() {
   const [saleItems, setSaleItems] = useState<(SaleItem & { product: { name: string; sku: string } })[]>([])
   const [loadingItems, setLoadingItems] = useState(false)
   const [stampingCfdi, setStampingCfdi] = useState(false)
+  const [orgId, setOrgId] = useState('')
 
   const debouncedSearch = useDebounce(search)
 
@@ -90,6 +91,13 @@ export default function VentasPage() {
     setLoading(false)
   }, [page, debouncedSearch, filterStatus, sortField, sortDir])
 
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const { data } = await supabase.from('profiles').select('organization_id').eq('id', session.user.id).single()
+      if (data) setOrgId(data.organization_id)
+    })
+  }, [])
   useEffect(() => { reset() }, [debouncedSearch, filterStatus])
   useEffect(() => { fetchData() }, [fetchData])
   useEffect(() => { if (searchParams.get('new') === '1') setShowModal(true) }, [searchParams])
@@ -148,6 +156,7 @@ export default function VentasPage() {
     const folio = `VTA-${String((saleCount ?? 0) + 1).padStart(5, '0')}`
 
     const { data: saleData, error } = await supabase.from('sales').insert({
+      organization_id: orgId,
       customer_id: selectedCustomer.id,
       status: 'pendiente',
       payment_method: paymentMethod,
