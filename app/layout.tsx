@@ -17,6 +17,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'GestorPro',
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
   applicationName: 'GestorPro',
   formatDetection: { telephone: false },
 }
@@ -48,7 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
             },
             success: {
-              iconTheme: { primary: '#00C4D4', secondary: '#0A0A0B' },
+              iconTheme: { primary: '#00C878', secondary: '#0A0A0B' },
             },
             error: {
               iconTheme: { primary: '#f87171', secondary: '#0A0A0B' },
