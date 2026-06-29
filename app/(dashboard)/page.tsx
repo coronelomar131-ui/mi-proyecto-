@@ -134,6 +134,8 @@ export default async function DashboardPage() {
     return h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches'
   })()
 
+  const sparkline7d = kpis?.sparkline7d ?? []
+
   const kpiCards = [
     {
       label: 'Ventas de hoy',
@@ -145,8 +147,6 @@ export default async function DashboardPage() {
       color: 'text-accent',
       bg: 'bg-accent/10',
       href: '/dashboard/ventas',
-      sparkline: kpis?.sparkline7d,
-      sparkColor: '#00C4D4',
     },
     {
       label: 'Ventas del mes',
@@ -156,8 +156,6 @@ export default async function DashboardPage() {
       color: 'text-emerald-400',
       bg: 'bg-emerald-500/10',
       href: '/dashboard/ventas',
-      sparkline: kpis?.sparkline7d,
-      sparkColor: '#34d399',
     },
     {
       label: 'Clientes activos',
@@ -167,8 +165,6 @@ export default async function DashboardPage() {
       color: 'text-blue-400',
       bg: 'bg-blue-500/10',
       href: '/dashboard/clientes',
-      sparkline: undefined,
-      sparkColor: undefined,
     },
     {
       label: 'Entregas activas',
@@ -178,8 +174,6 @@ export default async function DashboardPage() {
       color: 'text-purple-400',
       bg: 'bg-purple-500/10',
       href: '/dashboard/entregas',
-      sparkline: undefined,
-      sparkColor: undefined,
     },
     {
       label: 'Cotizaciones activas',
@@ -189,8 +183,6 @@ export default async function DashboardPage() {
       color: 'text-amber-400',
       bg: 'bg-amber-500/10',
       href: '/dashboard/cotizaciones',
-      sparkline: undefined,
-      sparkColor: undefined,
     },
     {
       label: 'Productos stock bajo',
@@ -200,8 +192,6 @@ export default async function DashboardPage() {
       color: 'text-red-400',
       bg: 'bg-red-500/10',
       href: '/dashboard/inventario',
-      sparkline: undefined,
-      sparkColor: undefined,
     },
   ]
 
@@ -227,14 +217,14 @@ export default async function DashboardPage() {
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-        {kpiCards.map((kpi) => (
+        {kpiCards.map((kpi, i) => (
           <Link key={kpi.label} href={kpi.href} className="kpi-card card-hover group">
             <div className="flex items-center justify-between">
               <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center', kpi.bg)}>
                 <kpi.icon className={cn('w-4.5 h-4.5', kpi.color)} size={18} />
               </div>
-              {kpi.sparkline && kpi.sparkline.length >= 2 && (
-                <KpiSparkline data={kpi.sparkline} color={kpi.sparkColor} width={72} height={28} />
+              {i < 2 && sparkline7d.length >= 2 && (
+                <KpiSparkline data={sparkline7d} color={i === 0 ? '#00C4D4' : '#34d399'} width={72} height={28} />
               )}
             </div>
             <div>
