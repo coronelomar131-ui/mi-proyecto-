@@ -6,7 +6,7 @@ const AUTH_ROUTES = ['/login', '/register']
 
 // Simple in-process rate limiter for Edge middleware (no Redis required).
 // Resets every WINDOW_MS. Good enough for Vercel serverless (single-instance window).
-const RATE_LIMIT_ROUTES = ['/login', '/register', '/api/cfdi', '/api/payments', '/api/whatsapp']
+const RATE_LIMIT_ROUTES = ['/api/cfdi', '/api/payments', '/api/whatsapp']
 const WINDOW_MS = 60_000   // 1 minute
 const MAX_REQUESTS = 20    // per IP per minute on sensitive routes
 
