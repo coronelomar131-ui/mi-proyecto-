@@ -1,35 +1,83 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { X, Keyboard } from 'lucide-react'
 
 const SHORTCUTS = [
   { keys: ['⌘', 'K'], label: 'Abrir búsqueda global', group: 'Global' },
   { keys: ['?'], label: 'Mostrar atajos de teclado', group: 'Global' },
   { keys: ['Esc'], label: 'Cerrar modal / paleta', group: 'Global' },
-  { keys: ['G', 'D'], label: 'Ir al Dashboard', group: 'Navegación' },
-  { keys: ['G', 'V'], label: 'Ir a Ventas', group: 'Navegación' },
-  { keys: ['G', 'C'], label: 'Ir a Clientes', group: 'Navegación' },
-  { keys: ['G', 'I'], label: 'Ir a Inventario', group: 'Navegación' },
+  { keys: ['G', 'D'], label: 'Ir al Dashboard', group: 'Navegación', dest: '/dashboard' },
+  { keys: ['G', 'V'], label: 'Ir a Ventas', group: 'Navegación', dest: '/dashboard/ventas' },
+  { keys: ['G', 'C'], label: 'Ir a Clientes', group: 'Navegación', dest: '/dashboard/clientes' },
+  { keys: ['G', 'I'], label: 'Ir a Inventario', group: 'Navegación', dest: '/dashboard/inventario' },
+  { keys: ['G', 'Q'], label: 'Ir a Cotizaciones', group: 'Navegación', dest: '/dashboard/cotizaciones' },
+  { keys: ['G', 'E'], label: 'Ir a Entregas', group: 'Navegación', dest: '/dashboard/entregas' },
+  { keys: ['G', 'R'], label: 'Ir a Reportes', group: 'Navegación', dest: '/dashboard/reportes' },
+  { keys: ['G', 'P'], label: 'Ir al Punto de Venta', group: 'Navegación', dest: '/dashboard/pos' },
   { keys: ['↑', '↓'], label: 'Navegar en lista', group: 'Paleta de comandos' },
   { keys: ['↵'], label: 'Seleccionar opción', group: 'Paleta de comandos' },
 ]
+
+const G_NAV: Record<string, string> = {
+  d: '/dashboard',
+  v: '/dashboard/ventas',
+  c: '/dashboard/clientes',
+  i: '/dashboard/inventario',
+  q: '/dashboard/cotizaciones',
+  e: '/dashboard/entregas',
+  r: '/dashboard/reportes',
+  p: '/dashboard/pos',
+  f: '/dashboard/finanzas',
+}
 
 const groups = Array.from(new Set(SHORTCUTS.map((s) => s.group)))
 
 export function KeyboardShortcutsModal() {
   const [open, setOpen] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
+    let gPressed = false
+    let gTimer: ReturnType<typeof setTimeout> | null = null
+
     const handler = (e: KeyboardEvent) => {
-      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
+      const isInput = tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target as HTMLElement)?.isContentEditable
+
+      // ? key — open shortcuts modal
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !isInput) {
         setOpen((o) => !o)
+        return
       }
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key === 'Escape') { setOpen(false); return }
+
+      // G+key navigation (skip in inputs)
+      if (!isInput) {
+        if (e.key === 'g' || e.key === 'G') {
+          gPressed = true
+          if (gTimer) clearTimeout(gTimer)
+          gTimer = setTimeout(() => { gPressed = false }, 1000)
+          return
+        }
+        if (gPressed) {
+          const dest = G_NAV[e.key.toLowerCase()]
+          if (dest) {
+            e.preventDefault()
+            gPressed = false
+            if (gTimer) clearTimeout(gTimer)
+            router.push(dest)
+          }
+        }
+      }
     }
     window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
+    return () => {
+      window.removeEventListener('keydown', handler)
+      if (gTimer) clearTimeout(gTimer)
+    }
+  }, [router])
 
   if (!open) return null
 

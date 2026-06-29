@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils/cn'
 import { OnboardingChecklist } from '@/components/ui/onboarding-checklist'
 import { SalesSparkline } from '@/components/ui/sales-sparkline'
 import { SalesGoalWidget } from '@/components/ui/sales-goal'
+import { KpiSparkline } from '@/components/ui/kpi-sparkline'
 
 async function getKPIs(orgId: string) {
   const supabase = createClient()
@@ -24,12 +25,14 @@ async function getKPIs(orgId: string) {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
   const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).toISOString()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+  const since7d = new Date(now.getTime() - 7 * 86400000).toISOString()
 
-  const [salesToday, salesYesterday, salesMonth, customers, allProducts, pendingQuotes, deliveries] =
+  const [salesToday, salesYesterday, salesMonth, sales7d, customers, allProducts, pendingQuotes, deliveries] =
     await Promise.all([
       supabase.from('sales').select('total').eq('organization_id', orgId).gte('created_at', todayStart).neq('status', 'cancelada'),
       supabase.from('sales').select('total').eq('organization_id', orgId).gte('created_at', yesterdayStart).lt('created_at', todayStart).neq('status', 'cancelada'),
       supabase.from('sales').select('total').eq('organization_id', orgId).gte('created_at', startOfMonth).neq('status', 'cancelada'),
+      supabase.from('sales').select('total, created_at').eq('organization_id', orgId).gte('created_at', since7d).neq('status', 'cancelada'),
       supabase.from('customers').select('id', { count: 'exact' }).eq('organization_id', orgId).eq('is_active', true),
       supabase.from('products').select('id, name, sku, stock, min_stock').eq('organization_id', orgId).eq('is_active', true),
       supabase.from('quotes').select('id', { count: 'exact' }).eq('organization_id', orgId).in('status', ['borrador', 'enviada']),
@@ -40,8 +43,15 @@ async function getKPIs(orgId: string) {
   const ventasAyer = salesYesterday.data?.reduce((s, r) => s + (r.total ?? 0), 0) ?? 0
   const ventasMes = salesMonth.data?.reduce((s, r) => s + (r.total ?? 0), 0) ?? 0
 
-  const lowStockProducts = (allProducts.data ?? []).filter((p) => p.stock <= p.min_stock)
+  // Build 7-day daily totals for sparkline
+  const dayTotals: number[] = Array(7).fill(0)
+  sales7d.data?.forEach((s) => {
+    const daysAgo = Math.floor((now.getTime() - new Date(s.created_at).getTime()) / 86400000)
+    const idx = 6 - Math.min(6, daysAgo)
+    dayTotals[idx] += s.total ?? 0
+  })
 
+  const lowStockProducts = (allProducts.data ?? []).filter((p) => p.stock <= p.min_stock)
   const changeHoy = ventasAyer > 0 ? ((ventasHoy - ventasAyer) / ventasAyer) * 100 : null
 
   return {
@@ -53,6 +63,7 @@ async function getKPIs(orgId: string) {
     cotizacionesPendientes: pendingQuotes.count ?? 0,
     entregasActivas: deliveries.count ?? 0,
     lowStockProducts,
+    sparkline7d: dayTotals,
   }
 }
 
@@ -132,6 +143,8 @@ export default async function DashboardPage() {
       color: 'text-accent',
       bg: 'bg-accent/10',
       href: '/dashboard/ventas',
+      sparkline: kpis?.sparkline7d,
+      sparkColor: '#00C4D4',
     },
     {
       label: 'Ventas del mes',
@@ -141,6 +154,8 @@ export default async function DashboardPage() {
       color: 'text-emerald-400',
       bg: 'bg-emerald-500/10',
       href: '/dashboard/ventas',
+      sparkline: kpis?.sparkline7d,
+      sparkColor: '#34d399',
     },
     {
       label: 'Clientes activos',
@@ -150,6 +165,8 @@ export default async function DashboardPage() {
       color: 'text-blue-400',
       bg: 'bg-blue-500/10',
       href: '/dashboard/clientes',
+      sparkline: undefined,
+      sparkColor: undefined,
     },
     {
       label: 'Entregas activas',
@@ -159,6 +176,8 @@ export default async function DashboardPage() {
       color: 'text-purple-400',
       bg: 'bg-purple-500/10',
       href: '/dashboard/entregas',
+      sparkline: undefined,
+      sparkColor: undefined,
     },
     {
       label: 'Cotizaciones activas',
@@ -168,6 +187,8 @@ export default async function DashboardPage() {
       color: 'text-amber-400',
       bg: 'bg-amber-500/10',
       href: '/dashboard/cotizaciones',
+      sparkline: undefined,
+      sparkColor: undefined,
     },
     {
       label: 'Productos stock bajo',
@@ -177,6 +198,8 @@ export default async function DashboardPage() {
       color: 'text-red-400',
       bg: 'bg-red-500/10',
       href: '/dashboard/inventario',
+      sparkline: undefined,
+      sparkColor: undefined,
     },
   ]
 
@@ -208,6 +231,9 @@ export default async function DashboardPage() {
               <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center', kpi.bg)}>
                 <kpi.icon className={cn('w-4.5 h-4.5', kpi.color)} size={18} />
               </div>
+              {kpi.sparkline && kpi.sparkline.length >= 2 && (
+                <KpiSparkline data={kpi.sparkline} color={kpi.sparkColor} width={72} height={28} />
+              )}
             </div>
             <div>
               <p className="text-2xl font-bold text-text-primary">{kpi.value}</p>

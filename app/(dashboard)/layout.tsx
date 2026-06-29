@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/sidebar'
 import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { MobileBottomNav } from '@/components/layout/mobile-bottom-nav'
+import { KeyboardShortcutsModal } from '@/components/ui/keyboard-shortcuts'
 import type { Profile } from '@/types'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
       </main>
       <MobileBottomNav />
+      <KeyboardShortcutsModal />
     </div>
   )
 }
