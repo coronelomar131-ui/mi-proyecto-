@@ -1,13 +1,16 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder') && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('jwmoacsdenrzvhvgjpzq')
-  ? process.env.NEXT_PUBLIC_SUPABASE_URL
-  : 'https://qnfjvtfzsqpyywkbdtny.supabase.co'
+const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+const isStaleOrMissing = !envUrl || envUrl.includes('placeholder') || envUrl.includes('jwmoacsdenrzvhvgjpzq')
 
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY && !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.includes('placeholder') && !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.includes('jwmoacsdenrzvhvgjpzq')
-  ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFuZmp2dGZ6c3FweXl3a2JkdG55Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MTM1NTMsImV4cCI6MjA5MjQ4OTU1M30.bidlvIkWpyCFZpd-jRZ2L-GwwnvxHGDFqVOSXL-t4tE'
+const SUPABASE_URL = isStaleOrMissing
+  ? 'https://qnfjvtfzsqpyywkbdtny.supabase.co'
+  : envUrl
+
+const SUPABASE_ANON_KEY = isStaleOrMissing
+  ? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFuZmp2dGZ6c3FweXl3a2JkdG55Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MTM1NTMsImV4cCI6MjA5MjQ4OTU1M30.bidlvIkWpyCFZpd-jRZ2L-GwwnvxHGDFqVOSXL-t4tE'
+  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '')
 
 export function createClient() {
   const cookieStore = cookies()
