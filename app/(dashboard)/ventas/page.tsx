@@ -6,7 +6,7 @@ import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePagination } from '@/lib/hooks/usePagination'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
-import { Plus, Search, X, ShoppingCart, Package, ArrowUpDown, ArrowUp, ArrowDown, Download, Eye, ChevronRight, ChevronLeft, Printer, Truck } from 'lucide-react'
+import { Plus, Search, X, ShoppingCart, Package, ArrowUpDown, ArrowUp, ArrowDown, Download, Eye, ChevronRight, ChevronLeft, Printer, Truck, FileCheck } from 'lucide-react'
 import Link from 'next/link'
 import { EmptyState } from '@/components/ui/empty-state'
 import { TableSkeleton } from '@/components/ui/skeleton'
@@ -57,6 +57,7 @@ export default function VentasPage() {
   const [viewSale, setViewSale] = useState<Sale | null>(null)
   const [saleItems, setSaleItems] = useState<(SaleItem & { product: { name: string; sku: string } })[]>([])
   const [loadingItems, setLoadingItems] = useState(false)
+  const [stampingCfdi, setStampingCfdi] = useState(false)
 
   const debouncedSearch = useDebounce(search)
 
@@ -208,6 +209,25 @@ export default function VentasPage() {
     })
     if (error) toast.error('Error al crear entrega')
     else toast.success('Entrega creada. Puedes verla en el módulo de Entregas.')
+  }
+
+  const handleStampCfdi = async (saleId: string) => {
+    setStampingCfdi(true)
+    try {
+      const res = await fetch('/api/cfdi/stamp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ saleId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      toast.success(`CFDI timbrado ✓ UUID: ${data.uuid.slice(0, 8)}…`)
+      setViewSale((prev) => prev ? { ...prev, cfdi_status: 'timbrado', cfdi_uuid: data.uuid } : null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al timbrar CFDI')
+    } finally {
+      setStampingCfdi(false)
+    }
   }
 
   const handleUpdateSaleStatus = async (saleId: string, status: SaleStatus) => {
@@ -627,6 +647,29 @@ export default function VentasPage() {
                   <span className="text-text-primary">Total</span>
                   <span className="text-accent">{formatCurrency(viewSale.total)}</span>
                 </div>
+              </div>
+
+              {/* CFDI / Factura electrónica */}
+              <div className="border-t border-border pt-4">
+                <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-3">Factura electrónica (CFDI)</p>
+                {(viewSale as Sale & { cfdi_status?: string; cfdi_uuid?: string }).cfdi_status === 'timbrado' ? (
+                  <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
+                    <FileCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-emerald-400">Timbrado ante el SAT</p>
+                      <p className="text-xs text-text-tertiary font-mono mt-0.5">{(viewSale as Sale & { cfdi_uuid?: string }).cfdi_uuid}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleStampCfdi(viewSale.id)}
+                    disabled={stampingCfdi}
+                    className="btn btn-sm w-full bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                  >
+                    <FileCheck className="w-3.5 h-3.5" />
+                    {stampingCfdi ? 'Timbrando...' : 'Timbrar CFDI'}
+                  </button>
+                )}
               </div>
 
               {/* Status progression */}

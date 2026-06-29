@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
-import { Plus, Search, X, FileText, Package, Send, Download, ShoppingCart, CheckCheck, Printer, MessageCircle } from 'lucide-react'
+import { Plus, Search, X, FileText, Package, Send, Download, ShoppingCart, CheckCheck, Printer, MessageCircle, CreditCard } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -43,6 +43,7 @@ export default function CotizacionesPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [validUntil, setValidUntil] = useState('')
   const [quoteNotes, setQuoteNotes] = useState('')
+  const [generatingLink, setGeneratingLink] = useState<string | null>(null)
 
   const searchParams = useSearchParams()
 
@@ -143,6 +144,29 @@ export default function CotizacionesPage() {
     if (error) { toast.error('Error al actualizar'); return }
     toast.success('Estado actualizado')
     fetchData()
+  }
+
+  const handleGeneratePaymentLink = async (quoteId: string) => {
+    setGeneratingLink(quoteId)
+    try {
+      const res = await fetch('/api/payments/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quoteId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      // Update local quote with link
+      setQuotes((prev) =>
+        prev.map((q) => q.id === quoteId ? { ...q, payment_link_url: data.url } : q)
+      )
+      toast.success('Enlace de pago generado')
+      window.open(data.url, '_blank')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al generar enlace')
+    } finally {
+      setGeneratingLink(null)
+    }
   }
 
   const handleConvertToSale = async (quote: Quote) => {
@@ -303,6 +327,28 @@ export default function CotizacionesPage() {
                           </a>
                         )
                       })()}
+                      {(q.status === 'enviada' || q.status === 'borrador') && (
+                        (q as Quote & { payment_link_url?: string }).payment_link_url ? (
+                          <a
+                            href={(q as Quote & { payment_link_url?: string }).payment_link_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-ghost btn btn-sm p-1.5 text-text-tertiary hover:text-accent"
+                            title="Ver enlace de pago"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                          </a>
+                        ) : (
+                          <button
+                            onClick={() => handleGeneratePaymentLink(q.id)}
+                            disabled={generatingLink === q.id}
+                            className="btn-ghost btn btn-sm p-1.5 text-text-tertiary hover:text-accent"
+                            title="Generar enlace de pago (Conekta)"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                          </button>
+                        )
+                      )}
                     </div>
                   </td>
                 </tr>

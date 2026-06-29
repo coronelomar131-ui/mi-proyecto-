@@ -67,7 +67,7 @@ export default function POSPreview() {
           {cart.map((item) => (
             <div key={item.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, color: '#E0E0EA', truncate: true }}>{item.name}</div>
+                <div style={{ fontSize: 12, color: '#E0E0EA', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
                 <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>{fmt(item.price)} c/u</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 10 }}>
