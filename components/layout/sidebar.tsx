@@ -162,7 +162,7 @@ export function Sidebar({ profile }: SidebarProps) {
       </aside>
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-56 flex-col bg-surface-1 border-r border-border z-30">
+      <aside className="sidebar-glass hidden lg:flex fixed left-0 top-0 bottom-0 w-56 flex-col bg-surface-1 border-r border-border z-30">
         <SidebarContent />
       </aside>
     </>
