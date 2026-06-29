@@ -43,18 +43,18 @@ export default function FinanzasPage() {
   const [orgId, setOrgId] = useState('')
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from('transactions').delete().eq('id', id)
+    const { error } = await supabase.from('transactions').delete().eq('id', id).eq('organization_id', orgId)
     if (error) toast.error('Error al eliminar')
     else { toast.success('Movimiento eliminado'); fetchTransactions() }
   }
 
-  const fetchTransactions = useCallback(async () => {
+  const fetchTransactions = useCallback(async (currentOrgId?: string) => {
     setLoading(true)
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
     const [{ data }, { data: todaySales }] = await Promise.all([
-      supabase.from('transactions').select('*').order('date', { ascending: false }).limit(100),
-      supabase.from('sales').select('total, payment_method').gte('created_at', todayStart.toISOString()).neq('status', 'cancelada'),
+      supabase.from('transactions').select('*').eq('organization_id', currentOrgId ?? orgId).order('date', { ascending: false }).limit(100),
+      supabase.from('sales').select('total, payment_method').eq('organization_id', currentOrgId ?? orgId).gte('created_at', todayStart.toISOString()).neq('status', 'cancelada'),
     ])
     setTransactions((data as Transaction[]) ?? [])
 
@@ -73,10 +73,12 @@ export default function FinanzasPage() {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return
       const { data } = await supabase.from('profiles').select('organization_id').eq('id', session.user.id).single()
-      if (data) setOrgId(data.organization_id)
+      if (data) {
+        setOrgId(data.organization_id)
+        fetchTransactions(data.organization_id)
+      }
     })
-  }, [])
-  useEffect(() => { fetchTransactions() }, [fetchTransactions])
+  }, [fetchTransactions])
 
   const filtered = transactions.filter((t) => filterType === 'all' || t.type === filterType)
 

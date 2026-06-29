@@ -11,8 +11,8 @@ import { BarChart3, TrendingUp, Package, Users, ShoppingCart, DollarSign, Refres
 import { subDays } from 'date-fns'
 import { cn } from '@/lib/utils/cn'
 
-const ACCENT = '#00C4D4'
-const COLORS = ['#00C4D4', '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+const ACCENT = '#00C878'
+const COLORS = ['#00C878', '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
 
 const RANGES = [
   { label: '7 días', days: 7 },
@@ -36,6 +36,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 
 export default function ReportesPage() {
   const supabase = createClient()
+  const [orgId, setOrgId] = useState('')
   const [rangeDays, setRangeDays] = useState(30)
   const [salesData, setSalesData] = useState<{ name: string; ventas: number; pedidos: number }[]>([])
   const [topProducts, setTopProducts] = useState<{ name: string; value: number }[]>([])
@@ -47,18 +48,22 @@ export default function ReportesPage() {
   const [prevSummary, setPrevSummary] = useState({ totalRevenue: 0, totalOrders: 0 })
   const [loading, setLoading] = useState(true)
 
-  const fetchData = useCallback(async (days: number) => {
+  const fetchData = useCallback(async (days: number, currentOrgId?: string) => {
     setLoading(true)
     const since = subDays(new Date(), days).toISOString()
+    const oid = currentOrgId ?? orgId
 
     const prevSince = subDays(new Date(), days * 2).toISOString()
-    const [{ data: salesRaw }, { data: itemsRaw }, { data: customersRaw }, { data: salesWithCustomer }, { data: prevSalesRaw }] = await Promise.all([
-      supabase.from('sales').select('id, total, created_at, status, customer_id, payment_method').gte('created_at', since).neq('status', 'cancelada'),
-      supabase.from('sale_items').select('quantity, subtotal, unit_price, product:products(name, cost_price)').limit(1000),
-      supabase.from('customers').select('city, is_active').eq('is_active', true),
-      supabase.from('sales').select('total, customer_id, customer:customers(name)').gte('created_at', since).neq('status', 'cancelada').limit(500),
-      supabase.from('sales').select('total').gte('created_at', prevSince).lt('created_at', since).neq('status', 'cancelada'),
+    const [{ data: salesRaw }, { data: customersRaw }, { data: salesWithCustomer }, { data: prevSalesRaw }] = await Promise.all([
+      supabase.from('sales').select('id, total, created_at, status, customer_id, payment_method').eq('organization_id', oid).gte('created_at', since).neq('status', 'cancelada'),
+      supabase.from('customers').select('city, is_active').eq('organization_id', oid).eq('is_active', true),
+      supabase.from('sales').select('total, customer_id, customer:customers(name)').eq('organization_id', oid).gte('created_at', since).neq('status', 'cancelada').limit(500),
+      supabase.from('sales').select('total').eq('organization_id', oid).gte('created_at', prevSince).lt('created_at', since).neq('status', 'cancelada'),
     ])
+    const saleIds = salesRaw?.map((s) => s.id) ?? []
+    const { data: itemsRaw } = saleIds.length > 0
+      ? await supabase.from('sale_items').select('quantity, subtotal, unit_price, product:products(name, cost_price)').in('sale_id', saleIds).limit(2000)
+      : { data: [] as { quantity: number; subtotal: number; unit_price: number; product: unknown }[] }
 
     // Summary KPIs
     const validSales = salesRaw ?? []
@@ -142,9 +147,22 @@ export default function ReportesPage() {
     setCustomerSegments(citySorted.map(([name, value]) => ({ name, value })))
 
     setLoading(false)
+  }, [orgId])
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const { data } = await supabase.from('profiles').select('organization_id').eq('id', session.user.id).single()
+      if (data) {
+        setOrgId(data.organization_id)
+        fetchData(rangeDays, data.organization_id)
+      }
+    })
   }, [])
 
-  useEffect(() => { fetchData(rangeDays) }, [fetchData, rangeDays])
+  useEffect(() => {
+    if (orgId) fetchData(rangeDays)
+  }, [rangeDays])
 
   return (
     <div className="animate-fade-in">

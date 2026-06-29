@@ -431,7 +431,7 @@ export default function ConfiguracionPage() {
                   <p className="text-xs text-text-tertiary">Vuelve al diseño original</p>
                 </div>
                 <button
-                  onClick={() => setTheme({ accent: '#00C4D4', glassMode: false, glassBlur: 20, radius: 'default', background: 'dark' })}
+                  onClick={() => setTheme({ accent: '#00C878', glassMode: false, glassBlur: 20, radius: 'default', background: 'dark' })}
                   className="btn-secondary btn btn-sm"
                 >
                   Restablecer

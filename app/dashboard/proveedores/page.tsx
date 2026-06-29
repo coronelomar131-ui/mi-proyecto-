@@ -116,7 +116,7 @@ export default function ProveedoresPage() {
   const handlePlaceOrder = async () => {
     if (!orderSupplier || orderItems.length === 0) return
     setPlacingOrder(true)
-    const { count } = await supabase.from('purchases').select('id', { count: 'exact' })
+    const { count } = await supabase.from('purchases').select('id', { count: 'exact' }).eq('organization_id', orgId)
     const folio = `OC-${String((count ?? 0) + 1).padStart(5, '0')}`
     const { data: purchaseData, error } = await supabase.from('purchases').insert({
       organization_id: orgId,
@@ -131,6 +131,7 @@ export default function ProveedoresPage() {
     if (error || !purchaseData) { toast.error('Error al crear orden'); setPlacingOrder(false); return }
     await supabase.from('purchase_items').insert(
       orderItems.map((i) => ({
+        organization_id: orgId,
         purchase_id: purchaseData.id,
         product_id: i.product.id,
         quantity: i.quantity,

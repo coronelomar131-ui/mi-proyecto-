@@ -224,7 +224,7 @@ export default async function DashboardPage() {
                 <kpi.icon className={cn('w-4.5 h-4.5', kpi.color)} size={18} />
               </div>
               {i < 2 && sparkline7d.length >= 2 && (
-                <KpiSparkline data={sparkline7d} color={i === 0 ? '#00C4D4' : '#34d399'} width={72} height={28} />
+                <KpiSparkline data={sparkline7d} color={i === 0 ? '#00C878' : '#34d399'} width={72} height={28} />
               )}
             </div>
             <div>

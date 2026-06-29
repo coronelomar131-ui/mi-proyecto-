@@ -125,7 +125,7 @@ export default function UsuariosPage() {
             Ventas del mes actual — ranking del equipo
           </h3>
           <div className="space-y-3">
-            {userStats.sort((a, b) => b.salesTotal - a.salesTotal).map((stat, i) => {
+            {[...userStats].sort((a, b) => b.salesTotal - a.salesTotal).map((stat, i) => {
               const user = users.find((u) => u.id === stat.userId)
               if (!user) return null
               const maxTotal = userStats[0]?.salesTotal ?? 1

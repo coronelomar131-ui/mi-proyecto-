@@ -97,7 +97,7 @@ export default function PosPage() {
     if (!selectedCustomer) { toast.error('Selecciona un cliente'); return }
     setSaving(true)
 
-    const { count: saleCount } = await supabase.from('sales').select('id', { count: 'exact' })
+    const { count: saleCount } = await supabase.from('sales').select('id', { count: 'exact' }).eq('organization_id', orgId)
     const folio = `VTA-${String((saleCount ?? 0) + 1).padStart(5, '0')}`
 
     const { data: saleData, error } = await supabase.from('sales').insert({
@@ -295,7 +295,7 @@ export default function PosPage() {
                       </button>
                     </div>
                     <p className="text-xs font-semibold text-text-primary w-16 text-right shrink-0">
-                      {formatCurrency(item.unit_price * item.quantity)}
+                      {formatCurrency(item.unit_price * item.quantity * (1 - item.discount / 100))}
                     </p>
                   </div>
                 ))}

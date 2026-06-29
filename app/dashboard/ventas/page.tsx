@@ -154,7 +154,7 @@ export default function VentasPage() {
     const total = subtotal + tax
 
     // Generate sequential folio
-    const { count: saleCount } = await supabase.from('sales').select('id', { count: 'exact' })
+    const { count: saleCount } = await supabase.from('sales').select('id', { count: 'exact' }).eq('organization_id', orgId)
     const folio = `VTA-${String((saleCount ?? 0) + 1).padStart(5, '0')}`
 
     const { data: saleData, error } = await supabase.from('sales').insert({

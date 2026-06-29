@@ -26,6 +26,7 @@ const STATUS_TRANSITIONS: Record<DeliveryStatus, DeliveryStatus | null> = {
 
 export default function EntregasPage() {
   const supabase = createClient()
+  const [orgId, setOrgId] = useState('')
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState<DeliveryStatus | 'all'>('all')
@@ -33,18 +34,28 @@ export default function EntregasPage() {
   const [failureReason, setFailureReason] = useState('')
   const [savingFail, setSavingFail] = useState(false)
 
-  const fetchDeliveries = useCallback(async () => {
+  const fetchDeliveries = useCallback(async (currentOrgId?: string) => {
     setLoading(true)
     const { data } = await supabase
       .from('deliveries')
       .select('*, sale:sales(folio, customer:customers(name))')
+      .eq('organization_id', currentOrgId ?? orgId)
       .order('created_at', { ascending: false })
       .limit(100)
     setDeliveries((data as Delivery[]) ?? [])
     setLoading(false)
-  }, [])
+  }, [orgId])
 
-  useEffect(() => { fetchDeliveries() }, [fetchDeliveries])
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const { data } = await supabase.from('profiles').select('organization_id').eq('id', session.user.id).single()
+      if (data) {
+        setOrgId(data.organization_id)
+        fetchDeliveries(data.organization_id)
+      }
+    })
+  }, [])
 
   const filtered = deliveries.filter((d) => filterStatus === 'all' || d.status === filterStatus)
 
@@ -77,7 +88,7 @@ export default function EntregasPage() {
       notes: failureReason.trim() || null,
     }).eq('id', failingDelivery.id)
     if (error) { toast.error('Error al marcar entrega'); setSavingFail(false); return }
-    toast.error('Entrega marcada como fallida')
+    toast.success('Entrega marcada como fallida')
     setFailingDelivery(null)
     setFailureReason('')
     setSavingFail(false)

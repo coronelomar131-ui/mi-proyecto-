@@ -114,7 +114,7 @@ export default function CotizacionesPage() {
     const tax = subtotal * 0.16
     const total = subtotal + tax
 
-    const { count: quoteCount } = await supabase.from('quotes').select('id', { count: 'exact' })
+    const { count: quoteCount } = await supabase.from('quotes').select('id', { count: 'exact' }).eq('organization_id', orgId)
     const folio = `COT-${String((quoteCount ?? 0) + 1).padStart(5, '0')}`
     const { data: quoteData, error } = await supabase.from('quotes').insert({
       organization_id: orgId,
@@ -190,7 +190,7 @@ export default function CotizacionesPage() {
 
     if (itemsErr || !items) { toast.error('Error al obtener productos'); setSaving(false); return }
 
-    const { count: saleCount } = await supabase.from('sales').select('id', { count: 'exact' })
+    const { count: saleCount } = await supabase.from('sales').select('id', { count: 'exact' }).eq('organization_id', orgId)
     const saleFolio = `VTA-${String((saleCount ?? 0) + 1).padStart(5, '0')}`
     const { data: saleData, error: saleErr } = await supabase.from('sales').insert({
       organization_id: orgId,
@@ -217,6 +217,8 @@ export default function CotizacionesPage() {
         subtotal: i.subtotal,
       }))
     )
+
+    await supabase.from('quotes').update({ status: 'aceptada' }).eq('id', quote.id)
 
     toast.success('¡Cotización convertida a venta!')
     fetchData()
