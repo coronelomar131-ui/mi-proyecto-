@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePagination } from '@/lib/hooks/usePagination'
+import { useRealtime } from '@/lib/hooks/use-realtime'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
 import { Plus, Search, X, ShoppingCart, Package, ArrowUpDown, ArrowUp, ArrowDown, Download, Eye, ChevronRight, ChevronLeft, Printer, Truck, FileCheck } from 'lucide-react'
@@ -102,6 +103,7 @@ export default function VentasPage() {
   }, [])
   useEffect(() => { reset() }, [debouncedSearch, filterStatus])
   useEffect(() => { fetchData() }, [fetchData])
+  useRealtime(['sales', 'sale_items'], fetchData)
   useEffect(() => { if (searchParams.get('new') === '1') setShowModal(true) }, [searchParams])
 
   const toggleSort = (field: typeof sortField) => {

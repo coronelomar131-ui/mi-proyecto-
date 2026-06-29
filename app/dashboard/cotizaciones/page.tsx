@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { useRealtime } from '@/lib/hooks/use-realtime'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
 import { Plus, Search, X, FileText, Package, Send, Download, ShoppingCart, CheckCheck, Printer, MessageCircle, CreditCard } from 'lucide-react'
@@ -81,6 +82,7 @@ export default function CotizacionesPage() {
     })
   }, [])
   useEffect(() => { fetchData() }, [fetchData])
+  useRealtime(['quotes', 'quote_items'], fetchData)
   useEffect(() => { if (searchParams.get('new') === '1') setShowModal(true) }, [searchParams])
 
   const filtered = quotes.filter(

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRealtime } from '@/lib/hooks/use-realtime'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils/format'
 import { Truck, MapPin, Clock, CheckCircle, XCircle, Navigation, X } from 'lucide-react'
@@ -56,6 +57,7 @@ export default function EntregasPage() {
       }
     })
   }, [])
+  useRealtime(['deliveries'], () => fetchDeliveries())
 
   const filtered = deliveries.filter((d) => filterStatus === 'all' || d.status === filterStatus)
 

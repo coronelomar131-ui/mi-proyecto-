@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRealtime } from '@/lib/hooks/use-realtime'
 import { createClient } from '@/lib/supabase/client'
 import { Plus, Search, X, Phone, Mail, Building2, Factory, ShoppingBag, Trash2, Download, PackageCheck, Clock, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -57,6 +58,7 @@ export default function ProveedoresPage() {
     })
   }, [])
   useEffect(() => { fetchSuppliers() }, [fetchSuppliers])
+  useRealtime(['suppliers', 'purchases'], fetchSuppliers)
 
   const filtered = suppliers.filter(
     (s) =>

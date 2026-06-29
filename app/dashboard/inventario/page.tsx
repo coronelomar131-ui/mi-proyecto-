@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePagination } from '@/lib/hooks/usePagination'
+import { useRealtime } from '@/lib/hooks/use-realtime'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatNumber } from '@/lib/utils/format'
 import { Plus, Search, X, AlertTriangle, Package, Download, Edit2, TrendingUp, TrendingDown, Upload, FileSpreadsheet, Percent, ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -91,6 +92,7 @@ export default function InventarioPage() {
   }, [])
   useEffect(() => { reset() }, [debouncedSearch, filterLow, filterCategory])
   useEffect(() => { fetchProducts() }, [fetchProducts])
+  useRealtime(['products'], fetchProducts)
   useEffect(() => { if (searchParams.get('new') === '1') setShowModal(true) }, [searchParams])
 
   const filtered = products  // server-side filtered and paginated

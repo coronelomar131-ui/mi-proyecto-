@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePagination } from '@/lib/hooks/usePagination'
+import { useRealtime } from '@/lib/hooks/use-realtime'
 import { customerSchema, getFieldErrors } from '@/lib/validations/schemas'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate, initials } from '@/lib/utils/format'
@@ -81,6 +82,7 @@ export default function ClientesPage() {
   }, [])
   useEffect(() => { reset() }, [debouncedSearch])
   useEffect(() => { fetchCustomers() }, [fetchCustomers])
+  useRealtime(['customers'], fetchCustomers)
   useEffect(() => { if (searchParams.get('new') === '1') setShowModal(true) }, [searchParams])
 
   const filtered = customers  // server-side filtered and paginated

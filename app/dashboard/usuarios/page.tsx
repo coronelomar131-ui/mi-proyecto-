@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRealtime } from '@/lib/hooks/use-realtime'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate, formatCurrency, initials } from '@/lib/utils/format'
 import { UserPlus, X, Shield, ShoppingCart, Package, Crown, Users, TrendingUp } from 'lucide-react'
@@ -53,6 +54,7 @@ export default function UsuariosPage() {
   }, [])
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
+  useRealtime(['profiles'], fetchUsers)
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault()

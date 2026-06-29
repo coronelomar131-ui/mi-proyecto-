@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRealtime } from '@/lib/hooks/use-realtime'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
 import { Plus, X, TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownRight, Download, Trash2 } from 'lucide-react'
@@ -79,6 +80,7 @@ export default function FinanzasPage() {
       }
     })
   }, [fetchTransactions])
+  useRealtime(['transactions'], () => fetchTransactions())
 
   const filtered = transactions.filter((t) => filterType === 'all' || t.type === filterType)
 
