@@ -151,14 +151,14 @@ export default function ConfiguracionPage() {
   ] as const
 
   const ACCENT_PRESETS = [
-    { label: 'Cyan',    hex: '#00C4D4' },
-    { label: 'Violeta', hex: '#8B5CF6' },
-    { label: 'Verde',   hex: '#10B981' },
-    { label: 'Azul',    hex: '#3B82F6' },
-    { label: 'Rosa',    hex: '#EC4899' },
-    { label: 'Naranja', hex: '#F97316' },
-    { label: 'Dorado',  hex: '#F59E0B' },
-    { label: 'Rojo',    hex: '#EF4444' },
+    { label: 'Esmeralda', hex: '#00C878' },
+    { label: 'Cyan',      hex: '#00C4D4' },
+    { label: 'Violeta',   hex: '#8B5CF6' },
+    { label: 'Verde',     hex: '#10B981' },
+    { label: 'Azul',      hex: '#3B82F6' },
+    { label: 'Rosa',      hex: '#EC4899' },
+    { label: 'Naranja',   hex: '#F97316' },
+    { label: 'Dorado',    hex: '#F59E0B' },
   ]
 
   const BACKGROUNDS: { id: ThemeBackground; label: string; desc: string; preview: string }[] = [

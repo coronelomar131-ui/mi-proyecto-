@@ -8,9 +8,9 @@
   :root {
     color-scheme: dark;
     /* Dynamic accent color — overridden by ThemeProvider */
-    --accent-h: 185;
+    --accent-h: 150;
     --accent-s: 100%;
-    --accent-l: 41%;
+    --accent-l: 39%;
     /* Glass system */
     --glass-blur: 20px;
     --glass-tint: rgba(255,255,255,0.045);

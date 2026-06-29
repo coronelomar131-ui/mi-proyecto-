@@ -14,7 +14,7 @@ export interface AppTheme {
 }
 
 const DEFAULT_THEME: AppTheme = {
-  accent: '#00C4D4',
+  accent: '#00C878',
   glassMode: false,
   glassBlur: 20,
   radius: 'default',
