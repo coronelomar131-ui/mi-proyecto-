@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createMiddlewareClient } from '@/lib/supabase/middleware'
 
-const PUBLIC_ROUTES = ['/', '/login', '/register', '/auth/callback', '/preview']
+const PUBLIC_ROUTES = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/auth/callback', '/preview']
 const AUTH_ROUTES = ['/login', '/register']
 
 // Simple in-process rate limiter for Edge middleware (no Redis required).

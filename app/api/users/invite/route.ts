@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { getPlanLimits } from '@/lib/utils/plan-limits'
 
 export async function POST(req: NextRequest) {
   const supabase = createClient()
@@ -16,6 +17,18 @@ export async function POST(req: NextRequest) {
 
   if (!profile || profile.role !== 'admin') {
     return NextResponse.json({ error: 'Se requiere rol de administrador' }, { status: 403 })
+  }
+
+  // Enforce user limit for the organization's plan
+  const [{ data: org }, { count: userCount }] = await Promise.all([
+    supabase.from('organizations').select('plan').eq('id', profile.organization_id).single(),
+    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('organization_id', profile.organization_id),
+  ])
+  const limits = getPlanLimits(org?.plan)
+  if ((userCount ?? 0) >= limits.users) {
+    return NextResponse.json({
+      error: `Tu plan actual permite hasta ${limits.users} usuarios. Mejora tu plan en Suscripción para invitar más.`,
+    }, { status: 403 })
   }
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY

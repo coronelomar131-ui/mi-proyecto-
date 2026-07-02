@@ -11,6 +11,7 @@ import { Plus, Search, X, AlertTriangle, Package, Download, Edit2, TrendingUp, T
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
+import { getPlanLimits } from '@/lib/utils/plan-limits'
 import { EmptyState } from '@/components/ui/empty-state'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import type { Product, Category } from '@/types'
@@ -48,6 +49,7 @@ export default function InventarioPage() {
   const [bulkField, setBulkField] = useState<'sale_price' | 'cost_price'>('sale_price')
   const [savingBulk, setSavingBulk] = useState(false)
   const [orgId, setOrgId] = useState('')
+  const [orgPlan, setOrgPlan] = useState('starter')
 
   const searchParams = useSearchParams()
 
@@ -86,8 +88,13 @@ export default function InventarioPage() {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return
-      const { data } = await supabase.from('profiles').select('organization_id').eq('id', session.user.id).single()
-      if (data) setOrgId(data.organization_id)
+      const { data } = await supabase.from('profiles').select('organization_id, organizations(plan)').eq('id', session.user.id).single()
+      if (data) {
+        setOrgId(data.organization_id)
+        const orgs = data.organizations as { plan?: string } | { plan?: string }[] | null
+        const plan = Array.isArray(orgs) ? orgs[0]?.plan : orgs?.plan
+        if (plan) setOrgPlan(plan)
+      }
     })
   }, [])
   useEffect(() => { reset() }, [debouncedSearch, filterLow, filterCategory])
@@ -99,9 +106,19 @@ export default function InventarioPage() {
 
   const lowStockCount = products.filter((p) => p.stock <= p.min_stock).length
 
+  const checkProductLimit = (adding: number) => {
+    const limit = getPlanLimits(orgPlan).products
+    if (total + adding > limit) {
+      toast.error(`Tu plan permite hasta ${limit} productos. Mejora tu plan en Suscripción para agregar más.`)
+      return false
+    }
+    return true
+  }
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.sku || !form.name) { toast.error('SKU y nombre son requeridos'); return }
+    if (!checkProductLimit(1)) return
     setSaving(true)
 
     const { error } = await supabase.from('products').insert({
@@ -201,6 +218,7 @@ export default function InventarioPage() {
 
   const handleImportProducts = async () => {
     if (importPreview.length === 0) return
+    if (!checkProductLimit(importPreview.length)) return
     setImporting(true)
     let success = 0; let failed = 0
     for (const row of importPreview) {

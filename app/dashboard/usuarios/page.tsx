@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
+import { getPlanLimits } from '@/lib/utils/plan-limits'
 import type { Profile, UserRole } from '@/types'
 
 const ROLE_CONFIG: Record<UserRole, { label: string; icon: React.ElementType; badge: string; description: string }> = {
@@ -31,6 +32,17 @@ export default function UsuariosPage() {
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ email: '', full_name: '', role: 'vendedor' as UserRole })
+  const [orgPlan, setOrgPlan] = useState('starter')
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const { data } = await supabase.from('profiles').select('organizations(plan)').eq('id', session.user.id).single()
+      const orgs = data?.organizations as { plan?: string } | { plan?: string }[] | null
+      const plan = Array.isArray(orgs) ? orgs[0]?.plan : orgs?.plan
+      if (plan) setOrgPlan(plan)
+    })
+  }, [])
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -59,6 +71,11 @@ export default function UsuariosPage() {
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.email || !form.full_name) { toast.error('Completa todos los campos'); return }
+    const userLimit = getPlanLimits(orgPlan).users
+    if (users.length >= userLimit) {
+      toast.error(`Tu plan permite hasta ${userLimit} usuarios. Mejora tu plan en Suscripción.`)
+      return
+    }
     setSaving(true)
 
     const res = await fetch('/api/users/invite', {

@@ -101,9 +101,9 @@ export function LoginForm() {
             </div>
 
             <div className="flex items-center justify-end">
-              <a href="#" className="text-xs text-accent hover:text-accent-400 transition-colors">
+              <Link href="/forgot-password" className="text-xs text-accent hover:text-accent-400 transition-colors">
                 ¿Olvidaste tu contraseña?
-              </a>
+              </Link>
             </div>
 
             <button
