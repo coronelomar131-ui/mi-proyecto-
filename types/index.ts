@@ -6,6 +6,9 @@ export interface Organization {
   slug: string
   logo_url?: string
   plan: 'starter' | 'pro' | 'enterprise'
+  subscription_status?: 'trial' | 'active' | 'past_due' | 'canceled'
+  trial_ends_at?: string
+  subscription_ends_at?: string
   created_at: string
 }
 

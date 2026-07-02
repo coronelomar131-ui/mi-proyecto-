@@ -20,6 +20,7 @@ import {
   Menu,
   X,
   Monitor,
+  CreditCard,
 } from 'lucide-react'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -39,6 +40,7 @@ const navItems = [
   { label: 'Proveedores', href: '/dashboard/proveedores', icon: Factory, roles: ['admin', 'almacen'] },
   { label: 'Reportes', href: '/dashboard/reportes', icon: BarChart3, roles: ['admin'] },
   { label: 'Usuarios', href: '/dashboard/usuarios', icon: UserCog, roles: ['admin'] },
+  { label: 'Suscripción', href: '/dashboard/suscripcion', icon: CreditCard, roles: ['admin'] },
   { label: 'Configuración', href: '/dashboard/configuracion', icon: Settings, roles: ['admin'] },
 ]
 
