@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/utils/format'
-import { Search, X, Plus, Minus, ShoppingCart, Printer, CheckCircle, CreditCard, Banknote, Building2, Trash2 } from 'lucide-react'
+import { Search, X, Plus, Minus, ShoppingCart, Printer, CheckCircle, CreditCard, Banknote, Building2, Trash2, Calculator } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
@@ -37,6 +37,19 @@ export default function PosPage() {
   const [userId, setUserId] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
 
+  // Corte de caja
+  const [showClosing, setShowClosing] = useState(false)
+  const [closingLoading, setClosingLoading] = useState(false)
+  const [closingSummary, setClosingSummary] = useState<{
+    periodStart: string
+    salesCount: number
+    total: number
+    byMethod: Record<string, number>
+  } | null>(null)
+  const [countedCash, setCountedCash] = useState('')
+  const [closingNotes, setClosingNotes] = useState('')
+  const [savingClosing, setSavingClosing] = useState(false)
+
   const fetchData = useCallback(async () => {
     const [{ data: prods }, { data: custs }] = await Promise.all([
       supabase.from('products').select('*').eq('is_active', true).order('name'),
@@ -60,7 +73,8 @@ export default function PosPage() {
   const filteredProducts = products.filter((p) =>
     search.trim() === '' ||
     p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.sku.toLowerCase().includes(search.toLowerCase())
+    p.sku.toLowerCase().includes(search.toLowerCase()) ||
+    (p.barcode ?? '').toLowerCase() === search.trim().toLowerCase()
   )
 
   const filteredCustomers = customers.filter((c) =>
@@ -139,6 +153,80 @@ export default function PosPage() {
     searchRef.current?.focus()
   }
 
+  // Barcode scanner: exact match on Enter (keyboard-wedge scanners type code + Enter)
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter' || !search.trim()) return
+    const code = search.trim().toLowerCase()
+    const match = products.find(
+      (p) => (p.barcode && p.barcode.toLowerCase() === code) || p.sku.toLowerCase() === code
+    )
+    if (match) {
+      if (match.stock === 0) { toast.error(`${match.name}: agotado`); setSearch(''); return }
+      addToCart(match)
+    } else if (filteredProducts.length === 1) {
+      addToCart(filteredProducts[0])
+    }
+  }
+
+  const openClosing = async () => {
+    setShowClosing(true)
+    setClosingLoading(true)
+    setCountedCash('')
+    setClosingNotes('')
+
+    const { data: lastClosing } = await supabase
+      .from('cash_closings')
+      .select('period_end')
+      .eq('organization_id', orgId)
+      .order('period_end', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
+    const periodStart = lastClosing?.period_end ?? startOfToday.toISOString()
+
+    const { data: salesData } = await supabase
+      .from('sales')
+      .select('total, payment_method')
+      .eq('organization_id', orgId)
+      .neq('status', 'cancelada')
+      .gte('created_at', periodStart)
+
+    const byMethod: Record<string, number> = {}
+    let total = 0
+    salesData?.forEach((s) => {
+      byMethod[s.payment_method] = (byMethod[s.payment_method] ?? 0) + (s.total ?? 0)
+      total += s.total ?? 0
+    })
+
+    setClosingSummary({ periodStart, salesCount: salesData?.length ?? 0, total, byMethod })
+    setClosingLoading(false)
+  }
+
+  const handleSaveClosing = async () => {
+    if (!closingSummary) return
+    setSavingClosing(true)
+    const expected = closingSummary.byMethod['efectivo'] ?? 0
+    const counted = parseFloat(countedCash) || 0
+    const { error } = await supabase.from('cash_closings').insert({
+      organization_id: orgId,
+      user_id: userId,
+      period_start: closingSummary.periodStart,
+      period_end: new Date().toISOString(),
+      sales_count: closingSummary.salesCount,
+      total_sales: closingSummary.total,
+      by_method: closingSummary.byMethod,
+      expected_cash: expected,
+      counted_cash: counted,
+      difference: counted - expected,
+      notes: closingNotes.trim() || null,
+    })
+    setSavingClosing(false)
+    if (error) { toast.error('Error al guardar el corte'); return }
+    toast.success('Corte de caja guardado')
+    setShowClosing(false)
+  }
+
   return (
     <div className="animate-fade-in">
       <div className="page-header">
@@ -146,9 +234,14 @@ export default function PosPage() {
           <h1 className="page-title">Punto de Venta</h1>
           <p className="text-xs text-text-tertiary mt-0.5">Venta rápida · {products.length} productos disponibles</p>
         </div>
-        <Link href="/dashboard/ventas" className="btn-secondary btn btn-sm">
-          Ver todas las ventas
-        </Link>
+        <div className="flex items-center gap-2">
+          <button onClick={openClosing} className="btn-secondary btn btn-sm">
+            <Calculator className="w-3.5 h-3.5" /> Corte de caja
+          </button>
+          <Link href="/dashboard/ventas" className="btn-secondary btn btn-sm">
+            Ver todas las ventas
+          </Link>
+        </div>
       </div>
 
       {/* Success overlay */}
@@ -189,7 +282,8 @@ export default function PosPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar producto por nombre o SKU... (o escanea código)"
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Buscar producto por nombre o SKU... (o escanea código de barras)"
               className="input pl-9 text-sm"
               autoComplete="off"
             />
@@ -351,6 +445,103 @@ export default function PosPage() {
           </div>
         </div>
       </div>
+
+      {/* Corte de caja modal */}
+      {showClosing && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowClosing(false)}>
+          <div className="modal max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Calculator className="w-4 h-4 text-accent" />
+                <h2 className="font-semibold text-text-primary">Corte de caja</h2>
+              </div>
+              <button onClick={() => setShowClosing(false)} className="btn-ghost btn p-1.5">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {closingLoading || !closingSummary ? (
+                <div className="py-8 flex justify-center">
+                  <span className="w-5 h-5 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <>
+                  <div className="bg-surface-2 rounded-xl p-4 space-y-2">
+                    <div className="flex justify-between text-xs text-text-tertiary">
+                      <span>Desde</span>
+                      <span>{new Date(closingSummary.periodStart).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-text-secondary">Ventas del periodo</span>
+                      <span className="font-semibold text-text-primary">{closingSummary.salesCount}</span>
+                    </div>
+                    {Object.entries(closingSummary.byMethod).map(([method, amount]) => (
+                      <div key={method} className="flex justify-between text-sm">
+                        <span className="text-text-secondary capitalize">{method}</span>
+                        <span className="font-medium text-text-primary">{formatCurrency(amount)}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between text-sm border-t border-border pt-2">
+                      <span className="font-semibold text-text-primary">Total vendido</span>
+                      <span className="font-bold text-accent">{formatCurrency(closingSummary.total)}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="label">Efectivo contado en caja *</label>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={countedCash}
+                      onChange={(e) => setCountedCash(e.target.value)}
+                      placeholder="0.00"
+                      className="input text-lg font-semibold"
+                      autoFocus
+                    />
+                    {countedCash !== '' && (
+                      <p className={cn(
+                        'text-xs mt-1.5 font-medium',
+                        (parseFloat(countedCash) || 0) - (closingSummary.byMethod['efectivo'] ?? 0) === 0
+                          ? 'text-emerald-400'
+                          : (parseFloat(countedCash) || 0) - (closingSummary.byMethod['efectivo'] ?? 0) > 0
+                            ? 'text-amber-400' : 'text-red-400'
+                      )}>
+                        {(() => {
+                          const diff = (parseFloat(countedCash) || 0) - (closingSummary.byMethod['efectivo'] ?? 0)
+                          if (diff === 0) return '✓ Caja cuadrada'
+                          return diff > 0 ? `Sobrante: ${formatCurrency(diff)}` : `Faltante: ${formatCurrency(Math.abs(diff))}`
+                        })()}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="label">Notas (opcional)</label>
+                    <textarea
+                      value={closingNotes}
+                      onChange={(e) => setClosingNotes(e.target.value)}
+                      placeholder="Ej: se retiraron $2,000 para depósito"
+                      className="input resize-none text-sm"
+                      rows={2}
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button onClick={() => setShowClosing(false)} className="btn-secondary btn flex-1">
+                      Cancelar
+                    </button>
+                    <button onClick={handleSaveClosing} disabled={savingClosing || countedCash === ''} className="btn-primary btn flex-1">
+                      {savingClosing ? 'Guardando...' : 'Cerrar caja'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

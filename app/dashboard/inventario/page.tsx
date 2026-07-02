@@ -7,7 +7,7 @@ import { usePagination } from '@/lib/hooks/usePagination'
 import { useRealtime } from '@/lib/hooks/use-realtime'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatNumber } from '@/lib/utils/format'
-import { Plus, Search, X, AlertTriangle, Package, Download, Edit2, TrendingUp, TrendingDown, Upload, FileSpreadsheet, Percent, ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Search, X, AlertTriangle, Package, Download, Edit2, TrendingUp, TrendingDown, Upload, FileSpreadsheet, Percent, ShoppingBag, ChevronLeft, ChevronRight, History } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
@@ -33,13 +33,16 @@ export default function InventarioPage() {
   const [stockAdjust, setStockAdjust] = useState('')
   const [stockType, setStockType] = useState<'add' | 'subtract' | 'set'>('add')
   const [form, setForm] = useState({
-    sku: '', name: '', description: '', unit: 'pieza',
+    sku: '', barcode: '', name: '', description: '', unit: 'pieza',
     cost_price: '', sale_price: '', stock: '0', min_stock: '5', category_id: '',
   })
   const [editForm, setEditForm] = useState({
-    name: '', description: '', unit: 'pieza',
+    name: '', barcode: '', description: '', unit: 'pieza',
     cost_price: '', sale_price: '', min_stock: '', category_id: '',
   })
+  const [kardexProduct, setKardexProduct] = useState<Product | null>(null)
+  const [kardexRows, setKardexRows] = useState<{ id: string; old_stock: number; new_stock: number; change: number; created_at: string }[]>([])
+  const [kardexLoading, setKardexLoading] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importPreview, setImportPreview] = useState<{ sku: string; name: string; sale_price: number; stock: number }[]>([])
@@ -124,6 +127,7 @@ export default function InventarioPage() {
     const { error } = await supabase.from('products').insert({
       organization_id: orgId,
       sku: form.sku,
+      barcode: form.barcode.trim() || null,
       name: form.name,
       description: form.description || null,
       unit: form.unit,
@@ -140,7 +144,7 @@ export default function InventarioPage() {
     } else {
       toast.success('Producto creado')
       setShowModal(false)
-      setForm({ sku: '', name: '', description: '', unit: 'pieza', cost_price: '', sale_price: '', stock: '0', min_stock: '5', category_id: '' })
+      setForm({ sku: '', barcode: '', name: '', description: '', unit: 'pieza', cost_price: '', sale_price: '', stock: '0', min_stock: '5', category_id: '' })
       fetchProducts()
     }
     setSaving(false)
@@ -150,6 +154,7 @@ export default function InventarioPage() {
     setEditProduct(p)
     setEditForm({
       name: p.name,
+      barcode: p.barcode ?? '',
       description: p.description ?? '',
       unit: p.unit,
       cost_price: String(p.cost_price),
@@ -165,6 +170,7 @@ export default function InventarioPage() {
     setSaving(true)
     const { error } = await supabase.from('products').update({
       name: editForm.name,
+      barcode: editForm.barcode.trim() || null,
       description: editForm.description || null,
       unit: editForm.unit,
       cost_price: parseFloat(editForm.cost_price) || 0,
@@ -190,6 +196,19 @@ export default function InventarioPage() {
     if (error) toast.error('Error al ajustar stock')
     else { toast.success(`Stock actualizado a ${newStock}`); setShowStockModal(false); setStockTarget(null); setStockAdjust(''); fetchProducts() }
     setSaving(false)
+  }
+
+  const openKardex = async (p: Product) => {
+    setKardexProduct(p)
+    setKardexLoading(true)
+    const { data } = await supabase
+      .from('inventory_movements')
+      .select('id, old_stock, new_stock, change, created_at')
+      .eq('product_id', p.id)
+      .order('created_at', { ascending: false })
+      .limit(30)
+    setKardexRows(data ?? [])
+    setKardexLoading(false)
   }
 
   const handleCSVFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -459,6 +478,13 @@ export default function InventarioPage() {
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openKardex(p) }}
+                          className="btn-ghost btn p-1.5 text-text-tertiary hover:text-accent"
+                          title="Ver movimientos (kardex)"
+                        >
+                          <History className="w-3.5 h-3.5" />
+                        </button>
                         {p.stock <= p.min_stock && (
                           <Link
                             href="/dashboard/proveedores"
@@ -514,6 +540,10 @@ export default function InventarioPage() {
                 <div className="col-span-2">
                   <label className="label">Nombre *</label>
                   <input type="text" value={editForm.name} onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value }))} className="input" required />
+                </div>
+                <div className="col-span-2">
+                  <label className="label">Código de barras</label>
+                  <input type="text" value={editForm.barcode} onChange={(e) => setEditForm(f => ({ ...f, barcode: e.target.value }))} className="input font-mono" placeholder="Escanea o escribe el código (opcional)" />
                 </div>
                 <div className="col-span-2">
                   <label className="label">Descripción</label>
@@ -722,6 +752,10 @@ export default function InventarioPage() {
                   <input type="text" value={form.name} onChange={(e) => setForm(p => ({ ...p, name: e.target.value }))} className="input" placeholder="Nombre del producto" required />
                 </div>
                 <div className="col-span-2">
+                  <label className="label">Código de barras</label>
+                  <input type="text" value={form.barcode} onChange={(e) => setForm(p => ({ ...p, barcode: e.target.value }))} className="input font-mono" placeholder="Escanea o escribe el código (opcional)" />
+                </div>
+                <div className="col-span-2">
                   <label className="label">Descripción</label>
                   <input type="text" value={form.description} onChange={(e) => setForm(p => ({ ...p, description: e.target.value }))} className="input" placeholder="Descripción opcional" />
                 </div>
@@ -830,6 +864,61 @@ export default function InventarioPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Kardex modal */}
+      {kardexProduct && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setKardexProduct(null)}>
+          <div className="modal w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div>
+                <h2 className="font-semibold text-text-primary flex items-center gap-2">
+                  <History className="w-4 h-4 text-accent" />
+                  Movimientos de inventario
+                </h2>
+                <p className="text-xs text-text-tertiary mt-0.5">{kardexProduct.name} · Stock actual: {formatNumber(kardexProduct.stock)}</p>
+              </div>
+              <button onClick={() => setKardexProduct(null)} className="btn-ghost btn p-1.5"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-6">
+              {kardexLoading ? (
+                <div className="py-8 flex justify-center">
+                  <span className="w-5 h-5 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
+                </div>
+              ) : kardexRows.length === 0 ? (
+                <p className="text-sm text-text-tertiary text-center py-8">
+                  Sin movimientos registrados aún. Aquí verás cada entrada y salida de stock (ventas, compras y ajustes).
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {kardexRows.map((m) => (
+                    <div key={m.id} className="flex items-center gap-3 p-2.5 bg-surface-2 rounded-lg">
+                      <div className={cn(
+                        'w-7 h-7 rounded-lg flex items-center justify-center shrink-0',
+                        m.change > 0 ? 'bg-emerald-500/15' : 'bg-red-500/15'
+                      )}>
+                        {m.change > 0
+                          ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                          : <TrendingDown className="w-3.5 h-3.5 text-red-400" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={cn('text-sm font-semibold', m.change > 0 ? 'text-emerald-400' : 'text-red-400')}>
+                          {m.change > 0 ? '+' : ''}{formatNumber(m.change)}
+                        </p>
+                        <p className="text-2xs text-text-tertiary">
+                          {formatNumber(m.old_stock)} → {formatNumber(m.new_stock)}
+                        </p>
+                      </div>
+                      <p className="text-2xs text-text-tertiary text-right shrink-0">
+                        {new Date(m.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

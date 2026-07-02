@@ -55,6 +55,7 @@ export interface Product {
   organization_id: string
   category_id?: string
   sku: string
+  barcode?: string
   name: string
   description?: string
   unit: string
